@@ -3,14 +3,14 @@ mod model {
     use std::ops::Add;
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    enum Chess {
+    pub enum Chess {
         Pawn,
         Drone,
         Queen,
     }
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    enum Player {
+    pub enum Player {
         Player1,
         Player2,
     }
@@ -23,7 +23,7 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    struct Point(i32, i32);
+    pub struct Point(pub i32, pub i32);
 
     impl Add<Point> for Point {
         type Output = Point;
@@ -34,7 +34,7 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    enum Action {
+    pub enum Action {
         Move {
             start : Point,
             goal : Point,
@@ -46,7 +46,7 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    struct OutOfBounds(Point);
+    pub struct OutOfBounds(Point);
 
     impl Chess {
         fn point(&self) -> i32 {
