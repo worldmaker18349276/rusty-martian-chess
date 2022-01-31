@@ -29,8 +29,7 @@ mod model {
         type Output = Point;
 
         fn add(self, other: Point) -> Point {
-            let Point(x, y) = self;
-            Point(x + other.0, y + other.1)
+            Point(self.0 + other.0, self.1 + other.1)
         }
     }
 
@@ -47,7 +46,7 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    struct OutOfBounds;
+    struct OutOfBounds(Point);
 
     impl Chess {
         fn point(&self) -> i32 {
@@ -71,13 +70,6 @@ mod model {
             match self {
                 Player::Player1 => Player::Player2,
                 Player::Player2 => Player::Player1,
-            }
-        }
-
-        pub fn is_in_territory(&self, point: Point) -> bool {
-            match self {
-                Player::Player1 => point.0 >= 0 && point.0 < 4 && point.1 >= 0 && point.1 < 4,
-                Player::Player2 => point.0 >= 4 && point.0 < 8 && point.1 >= 0 && point.1 < 4,
             }
         }
     }
@@ -105,8 +97,14 @@ mod model {
             }
         }
 
-        pub fn is_in_board(&self, point: Point) -> bool {
-            point.0 >= 0 && point.0 < 8 && point.1 >= 0 && point.1 < 4
+        pub fn get(&self, point: Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
+            if point.0 >= 0 && point.0 < 4 && point.1 >= 0 && point.1 < 4 {
+                Ok((Player::Player1, self.board[point.0 as usize][point.1 as usize]))
+            } else if point.0 >= 4 && point.0 < 8 && point.1 >= 0 && point.1 < 4 {
+                Ok((Player::Player2, self.board[point.0 as usize][point.1 as usize]))
+            } else {
+                Err(OutOfBounds(point))
+            }
         }
 
         pub fn get_chess(&self, point: Point) -> Result<Option<Chess>, OutOfBounds> {
@@ -148,59 +146,40 @@ mod model {
         }
 
         #[test]
-        fn player_is_in_territory() {
-            let player1 = Player::Player1;
-            let player2 = Player::Player2;
+        fn playfield_get_owner() {
+            let playfield = Playfield::init();
 
             for x in 0..4 {
                 for y in 0..4 {
-                    assert_eq!(player1.is_in_territory(Point(x, y)), true);
-                    assert_eq!(player2.is_in_territory(Point(x, y)), false);
+                    assert!(
+                        match playfield.get(Point(x, y)) {
+                            Ok((Player::Player1, _)) => true,
+                            _ => false,
+                        }
+                    );
                 }
             }
 
             for x in 4..8 {
                 for y in 0..4 {
-                    assert_eq!(player1.is_in_territory(Point(x, y)), false);
-                    assert_eq!(player2.is_in_territory(Point(x, y)), true);
+                    assert!(
+                        match playfield.get(Point(x, y)) {
+                            Ok((Player::Player2, _)) => true,
+                            _ => false,
+                        }
+                    );
                 }
             }
         }
 
         #[test]
-        fn player_out_of_bounds() {
-            let player1 = Player::Player1;
-            let player2 = Player::Player2;
-
-            assert_eq!(player1.is_in_territory(Point(-1, 3)), false);
-            assert_eq!(player2.is_in_territory(Point(-1, 3)), false);
-            assert_eq!(player1.is_in_territory(Point(9, 3)), false);
-            assert_eq!(player2.is_in_territory(Point(9, 3)), false);
-            assert_eq!(player1.is_in_territory(Point(2, -2)), false);
-            assert_eq!(player2.is_in_territory(Point(2, -2)), false);
-            assert_eq!(player1.is_in_territory(Point(2, 4)), false);
-            assert_eq!(player2.is_in_territory(Point(2, 4)), false);
-        }
-
-        #[test]
-        fn playfield_is_in_board() {
+        fn playfield_get_out_of_bounds() {
             let playfield = Playfield::init();
 
-            for x in 0..8 {
-                for y in 0..4 {
-                    assert_eq!(playfield.is_in_board(Point(x, y)), true);
-                }
-            }
-        }
-
-        #[test]
-        fn playfield_out_of_bounds() {
-            let playfield = Playfield::init();
-
-            assert_eq!(playfield.is_in_board(Point(-1, 3)), false);
-            assert_eq!(playfield.is_in_board(Point(9, 3)), false);
-            assert_eq!(playfield.is_in_board(Point(2, -2)), false);
-            assert_eq!(playfield.is_in_board(Point(2, 4)), false);
+            assert_eq!(playfield.get(Point(-1, 3)), Err(OutOfBounds(Point(-1, 3))));
+            assert_eq!(playfield.get(Point(9, 3)), Err(OutOfBounds(Point(9, 3))));
+            assert_eq!(playfield.get(Point(2, -2)), Err(OutOfBounds(Point(2, -2))));
+            assert_eq!(playfield.get(Point(2, 4)), Err(OutOfBounds(Point(2, 4))));
         }
     }
 }
