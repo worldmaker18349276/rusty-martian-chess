@@ -22,10 +22,7 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone)]
-    struct Point {
-        x: i32,
-        y: i32,
-    }
+    struct Point(i32, i32);
 
     #[derive(Debug, Copy, Clone)]
     enum Action {
@@ -61,6 +58,13 @@ mod model {
             match self {
                 Player::Player1 => Player::Player2,
                 Player::Player2 => Player::Player1,
+            }
+        }
+
+        pub fn is_in_territory(&self, point: Point) -> bool {
+            match self {
+                Player::Player1 => point.0 >= 0 && point.0 < 4 && point.1 >= 0 && point.1 < 4,
+                Player::Player2 => point.0 >= 4 && point.0 < 8 && point.1 >= 0 && point.1 < 4,
             }
         }
     }
@@ -104,6 +108,46 @@ mod model {
                 write!(f, "\n")?;
             }
             Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+    
+        #[test]
+        fn player_is_in_territory() {
+            let player1 = Player::Player1;
+            let player2 = Player::Player2;
+
+            for x in 0..4 {
+                for y in 0..4 {
+                    assert_eq!(player1.is_in_territory(Point(x, y)), true);
+                    assert_eq!(player2.is_in_territory(Point(x, y)), false);
+                }
+            }
+
+            for x in 4..8 {
+                for y in 0..4 {
+                    assert_eq!(player1.is_in_territory(Point(x, y)), false);
+                    assert_eq!(player2.is_in_territory(Point(x, y)), true);
+                }
+            }
+        }
+
+        #[test]
+        fn player_out_of_bounds() {
+            let player1 = Player::Player1;
+            let player2 = Player::Player2;
+
+            assert_eq!(player1.is_in_territory(Point(-1, 2)), false);
+            assert_eq!(player2.is_in_territory(Point(-1, 2)), false);
+            assert_eq!(player1.is_in_territory(Point(9, 3)), false);
+            assert_eq!(player2.is_in_territory(Point(9, 3)), false);
+            assert_eq!(player1.is_in_territory(Point(2, -2)), false);
+            assert_eq!(player2.is_in_territory(Point(2, -2)), false);
+            assert_eq!(player1.is_in_territory(Point(2, 4)), false);
+            assert_eq!(player2.is_in_territory(Point(2, 4)), false);
         }
     }
 }
