@@ -39,10 +39,12 @@ mod model {
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Action {
         Move {
+            player: Player,
             start: Point,
             goal: Point,
         },
         Capture {
+            player: Player,
             start: Point,
             goal: Point,
         },
@@ -137,12 +139,12 @@ mod model {
                             Err(_) => {},
                             Ok((owner, Option::Some(_))) => {
                                 if owner != player {
-                                    vec.push(Action::Capture { start, goal });
+                                    vec.push(Action::Capture { player, start, goal });
                                 }
                                 // TODO: field promotion
                             },
                             Ok((_, Option::None)) => {
-                                vec.push(Action::Move { start, goal });
+                                vec.push(Action::Move { player, start, goal });
                             },
                         }
                     }
@@ -156,24 +158,24 @@ mod model {
                             Err(_) => {},
                             Ok((owner, Option::Some(_))) => {
                                 if owner != player {
-                                    vec.push(Action::Capture { start, goal });
+                                    vec.push(Action::Capture { player, start, goal });
                                 }
                                 // TODO: field promotion
                             },
                             Ok((_, Option::None)) => {
-                                vec.push(Action::Move { start, goal });
+                                vec.push(Action::Move { player, start, goal });
 
                                 goal = goal + dir;
                                 match self.get(goal) {
                                     Err(_) => {},
                                     Ok((owner, Option::Some(_))) => {
                                         if owner != self.turn {
-                                            vec.push(Action::Capture { start, goal });
+                                            vec.push(Action::Capture { player, start, goal });
                                         }
                                         // TODO: field promotion
                                     },
                                     Ok((_, Option::None)) => {
-                                        vec.push(Action::Move { start, goal });
+                                        vec.push(Action::Move { player, start, goal });
                                     },
                                 }
                             },
@@ -191,12 +193,12 @@ mod model {
                                 Err(_) => {},
                                 Ok((owner, Option::Some(_))) => {
                                     if owner != player {
-                                        vec.push(Action::Capture { start, goal });
+                                        vec.push(Action::Capture { player, start, goal });
                                     }
                                     // TODO: field promotion
                                 },
                                 Ok((_, Option::None)) => {
-                                    vec.push(Action::Move { start, goal });
+                                    vec.push(Action::Move { player, start, goal });
                                     continue;
                                 },
                             }
@@ -340,10 +342,10 @@ mod model {
             };
             let mut moves = playfield.possible_moves(Point(3, 2));
             let mut expected = vec![
-                Action::Move {start: Point(3, 2), goal: Point(2, 3)},
-                Action::Move {start: Point(3, 2), goal: Point(4, 3)}, // cross canal
-                // Action::Move {start: Point(3, 2), goal: Point(2, 1)}, // stop by chess
-                Action::Capture {start: Point(3, 2), goal: Point(4, 1)}, // capture chess in the enemy's territory
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 3)},
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 3)}, // cross canal
+                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 1)}, // stop by chess
+                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(4, 1)}, // capture chess in the enemy's territory
             ];
             moves.sort();
             expected.sort();
@@ -373,14 +375,14 @@ mod model {
             };
             let mut moves = playfield.possible_moves(Point(3, 2));
             let mut expected = vec![
-                Action::Move {start: Point(3, 2), goal: Point(2, 2)},
-                Action::Move {start: Point(3, 2), goal: Point(1, 2)}, // cross an empty grid
-                Action::Move {start: Point(3, 2), goal: Point(3, 3)},
-                // Action::Move {start: Point(3, 2), goal: Point(3, 4)}, // stop by boundary
-                // Action::Capture {start: Point(3, 2), goal: Point(3, 1)}, // stop by chess
-                // Action::Capture {start: Point(3, 2), goal: Point(3, 0)}, // stop by chess
-                Action::Move {start: Point(3, 2), goal: Point(4, 2)}, // cross canal
-                Action::Capture {start: Point(3, 2), goal: Point(5, 2)}, // capture chess in the enemy's territory
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 2)},
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(1, 2)}, // cross an empty grid
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 3)},
+                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 4)}, // stop by boundary
+                // Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(3, 1)}, // stop by chess
+                // Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(3, 0)}, // stop by chess
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 2)}, // cross canal
+                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(5, 2)}, // capture chess in the enemy's territory
             ];
             moves.sort();
             expected.sort();
@@ -410,24 +412,24 @@ mod model {
             };
             let mut moves = playfield.possible_moves(Point(3, 2));
             let mut expected = vec![
-                Action::Move {start: Point(3, 2), goal: Point(2, 2)},
-                Action::Move {start: Point(3, 2), goal: Point(1, 2)}, // cross an empty grid
-                Action::Move {start: Point(3, 2), goal: Point(0, 2)}, // cross two empty grids
-                Action::Move {start: Point(3, 2), goal: Point(3, 3)},
-                // Action::Move {start: Point(3, 2), goal: Point(3, 4)}, // stop by boundary
-                Action::Move {start: Point(3, 2), goal: Point(3, 1)},
-                // Action::Move {start: Point(3, 2), goal: Point(3, 0)}, // stop by chess
-                Action::Move {start: Point(3, 2), goal: Point(4, 2)}, // cross canal
-                Action::Move {start: Point(3, 2), goal: Point(5, 2)}, // cross an empty grid
-                Action::Move {start: Point(3, 2), goal: Point(6, 2)}, // cross two empty grids
-                Action::Capture {start: Point(3, 2), goal: Point(7, 2)}, // capture chess in the enemy's territory
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 2)},
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(1, 2)}, // cross an empty grid
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(0, 2)}, // cross two empty grids
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 3)},
+                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 4)}, // stop by boundary
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 1)},
+                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 0)}, // stop by chess
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 2)}, // cross canal
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(5, 2)}, // cross an empty grid
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(6, 2)}, // cross two empty grids
+                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(7, 2)}, // capture chess in the enemy's territory
 
-                Action::Move {start: Point(3, 2), goal: Point(2, 1)}, // diagonal moves
-                Action::Move {start: Point(3, 2), goal: Point(1, 0)}, // diagonal moves
-                Action::Move {start: Point(3, 2), goal: Point(2, 3)}, // diagonal moves
-                Action::Move {start: Point(3, 2), goal: Point(4, 3)}, // diagonal moves
-                Action::Move {start: Point(3, 2), goal: Point(4, 1)}, // diagonal moves
-                Action::Capture {start: Point(3, 2), goal: Point(5, 0)}, // diagonal capture
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 1)}, // diagonal moves
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(1, 0)}, // diagonal moves
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 3)}, // diagonal moves
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 3)}, // diagonal moves
+                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 1)}, // diagonal moves
+                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(5, 0)}, // diagonal capture
             ];
             moves.sort();
             expected.sort();
