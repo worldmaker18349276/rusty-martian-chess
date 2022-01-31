@@ -1,3 +1,5 @@
+#[allow(unused)]
+
 mod model {
     use std::fmt;
     use std::ops::Add;
@@ -18,9 +20,9 @@ mod model {
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct Playfield {
-        board : [[Option<Chess>; 4]; 8],
-        scores : [i32; 2],
-        turn : Player,
+        board: [[Option<Chess>; 4]; 8],
+        scores: [i32; 2],
+        turn: Player,
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -37,12 +39,12 @@ mod model {
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Action {
         Move {
-            start : Point,
-            goal : Point,
+            start: Point,
+            goal: Point,
         },
         Capture {
-            start : Point,
-            goal : Point,
+            start: Point,
+            goal: Point,
         },
     }
 
@@ -83,7 +85,7 @@ mod model {
             let n = Option::<Chess>::None;
 
             Playfield {
-                board : [
+                board: [
                     [q, q, d, n],
                     [q, d, p, n],
                     [d, p, p, n],
@@ -93,8 +95,8 @@ mod model {
                     [n, p, d, q],
                     [n, d, q, q],
                 ],
-                scores : [0, 0],
-                turn : Player::Player1,
+                scores: [0, 0],
+                turn: Player::Player1,
             }
         }
 
@@ -277,6 +279,49 @@ mod model {
         }
 
         #[test]
+        fn playfield_possible_moves_invalid() {
+            let p = Option::Some(Chess::Pawn);
+            let d = Option::Some(Chess::Drone);
+            let q = Option::Some(Chess::Queen);
+            let n = Option::<Chess>::None;
+
+            let playfield = Playfield {
+                board: [
+                    [n, n, n, n],
+                    [n, n, n, n],
+                    [n, n, n, p],
+                    [n, n, n, n],
+                    [n, n, n, n],
+                    [n, n, n, n],
+                    [n, n, n, p],
+                    [n, n, n, n],
+                ],
+                scores: [0, 0],
+                turn: Player::Player1,
+            };
+
+            let playfield2 = Playfield {
+                board: [
+                    [n, n, n, n],
+                    [n, n, n, n],
+                    [n, n, n, p],
+                    [n, n, n, n],
+                    [n, n, n, n],
+                    [n, n, n, n],
+                    [n, n, n, p],
+                    [n, n, n, n],
+                ],
+                scores: [0, 0],
+                turn: Player::Player2,
+            };
+
+            assert_eq!(playfield.possible_moves(Point(3, 2)), vec![]); // empty grid
+            assert_eq!(playfield.possible_moves(Point(2, 5)), vec![]); // out of bounds
+            assert_eq!(playfield.possible_moves(Point(6, 3)), vec![]); // invalid owner
+            assert_eq!(playfield2.possible_moves(Point(2, 3)), vec![]); // invalid owner
+        }
+
+        #[test]
         fn playfield_possible_moves_pawn() {
             let p = Option::Some(Chess::Pawn);
             let d = Option::Some(Chess::Drone);
@@ -284,7 +329,7 @@ mod model {
             let n = Option::<Chess>::None;
 
             let playfield = Playfield {
-                board : [
+                board: [
                     [n, n, n, n],
                     [n, n, n, n],
                     [n, p, n, n],
@@ -294,8 +339,8 @@ mod model {
                     [n, n, n, n],
                     [n, n, n, n],
                 ],
-                scores : [0, 0],
-                turn : Player::Player1,
+                scores: [0, 0],
+                turn: Player::Player1,
             };
             let mut moves = playfield.possible_moves(Point(3, 2));
             let mut expected = vec![
@@ -317,7 +362,7 @@ mod model {
             let n = Option::<Chess>::None;
 
             let playfield = Playfield {
-                board : [
+                board: [
                     [n, n, n, n],
                     [n, n, n, n],
                     [n, n, n, n],
@@ -327,8 +372,8 @@ mod model {
                     [n, n, n, n],
                     [n, n, n, n],
                 ],
-                scores : [0, 0],
-                turn : Player::Player1,
+                scores: [0, 0],
+                turn: Player::Player1,
             };
             let mut moves = playfield.possible_moves(Point(3, 2));
             let mut expected = vec![
@@ -354,7 +399,7 @@ mod model {
             let n = Option::<Chess>::None;
 
             let playfield = Playfield {
-                board : [
+                board: [
                     [n, n, n, n],
                     [n, n, n, n],
                     [n, n, n, n],
@@ -364,8 +409,8 @@ mod model {
                     [n, n, n, n],
                     [n, n, d, n],
                 ],
-                scores : [0, 0],
-                turn : Player::Player1,
+                scores: [0, 0],
+                turn: Player::Player1,
             };
             let mut moves = playfield.possible_moves(Point(3, 2));
             let mut expected = vec![
