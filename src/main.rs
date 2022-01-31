@@ -37,17 +37,100 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub enum Action {
-        Move {
-            player: Player,
-            start: Point,
-            goal: Point,
-        },
-        Capture {
-            player: Player,
-            start: Point,
-            goal: Point,
-        },
+    pub enum ChessMovement {
+        PawnUpLeft,
+        PawnUpRight,
+        PawnDownLeft,
+        PawnDownRight,
+
+        DroneUp,
+        DroneUp2,
+        DroneDown,
+        DroneDown2,
+        DroneLeft,
+        DroneLeft2,
+        DroneRight,
+        DroneRight2,
+
+        QueenUp(usize),
+        QueenDown(usize),
+        QueenLeft(usize),
+        QueenRight(usize),
+        QueenUpLeft(usize),
+        QueenUpRight(usize),
+        QueenDownLeft(usize),
+        QueenDownRight(usize),
+    }
+
+    impl ChessMovement {
+        fn value(&self) -> (Chess, Point, usize) {
+            match self {
+                ChessMovement::PawnUpLeft    => (Chess::Pawn, Point(-1,-1), 0),
+                ChessMovement::PawnUpRight   => (Chess::Pawn, Point(-1, 1), 0),
+                ChessMovement::PawnDownLeft  => (Chess::Pawn, Point( 1,-1), 0),
+                ChessMovement::PawnDownRight => (Chess::Pawn, Point( 1, 1), 0),
+        
+                ChessMovement::DroneUp     => (Chess::Drone, Point(-1, 0), 0),
+                ChessMovement::DroneUp2    => (Chess::Drone, Point(-1, 0), 1),
+                ChessMovement::DroneDown   => (Chess::Drone, Point( 1, 0), 0),
+                ChessMovement::DroneDown2  => (Chess::Drone, Point( 1, 0), 1),
+                ChessMovement::DroneLeft   => (Chess::Drone, Point( 0,-1), 0),
+                ChessMovement::DroneLeft2  => (Chess::Drone, Point( 0,-1), 1),
+                ChessMovement::DroneRight  => (Chess::Drone, Point( 0, 1), 0),
+                ChessMovement::DroneRight2 => (Chess::Drone, Point( 0, 1), 1),
+        
+                ChessMovement::QueenUp(cross)        => (Chess::Queen, Point(-1, 0), *cross),
+                ChessMovement::QueenDown(cross)      => (Chess::Queen, Point( 1, 0), *cross),
+                ChessMovement::QueenLeft(cross)      => (Chess::Queen, Point( 0,-1), *cross),
+                ChessMovement::QueenRight(cross)     => (Chess::Queen, Point( 0, 1), *cross),
+                ChessMovement::QueenUpLeft(cross)    => (Chess::Queen, Point(-1,-1), *cross),
+                ChessMovement::QueenUpRight(cross)   => (Chess::Queen, Point(-1, 1), *cross),
+                ChessMovement::QueenDownLeft(cross)  => (Chess::Queen, Point( 1,-1), *cross),
+                ChessMovement::QueenDownRight(cross) => (Chess::Queen, Point( 1, 1), *cross),
+            }
+        }
+
+        fn possible_actions_of(chess: &Chess) -> Vec<Self> {
+            match chess {
+                Chess::Pawn => vec![
+                    ChessMovement::PawnUpLeft,
+                    ChessMovement::PawnUpRight,
+                    ChessMovement::PawnDownLeft,
+                    ChessMovement::PawnDownRight,
+                ],
+                Chess::Drone => vec![
+                    ChessMovement::DroneUp,
+                    ChessMovement::DroneUp2,
+                    ChessMovement::DroneDown,
+                    ChessMovement::DroneDown2,
+                    ChessMovement::DroneLeft,
+                    ChessMovement::DroneLeft2,
+                    ChessMovement::DroneRight,
+                    ChessMovement::DroneRight2,
+                ],
+                Chess::Queen => {
+                    let mut res = Vec::new();
+                    for cross in 0..8 {
+                        res.push(ChessMovement::QueenUp(cross));
+                        res.push(ChessMovement::QueenDown(cross));
+                        res.push(ChessMovement::QueenLeft(cross));
+                        res.push(ChessMovement::QueenRight(cross));
+                        res.push(ChessMovement::QueenUpLeft(cross));
+                        res.push(ChessMovement::QueenUpRight(cross));
+                        res.push(ChessMovement::QueenDownLeft(cross));
+                        res.push(ChessMovement::QueenDownRight(cross));
+                    }
+                    res
+                },
+            }
+        }
+    }
+
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub struct Action {
+        player: Player,
+        position: Point,
+        movement: ChessMovement,
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -102,111 +185,65 @@ mod model {
             }
         }
 
-        pub fn get(&self, point: Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
-            if point.0 >= 0 && point.0 < 4 && point.1 >= 0 && point.1 < 4 {
-                Ok((Player::Player1, self.board[point.0 as usize][point.1 as usize]))
-            } else if point.0 >= 4 && point.0 < 8 && point.1 >= 0 && point.1 < 4 {
-                Ok((Player::Player2, self.board[point.0 as usize][point.1 as usize]))
+        pub fn get(&self, position: Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
+            if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
+                Ok((Player::Player1, self.board[position.0 as usize][position.1 as usize]))
+            } else if position.0 >= 4 && position.0 < 8 && position.1 >= 0 && position.1 < 4 {
+                Ok((Player::Player2, self.board[position.0 as usize][position.1 as usize]))
             } else {
-                Err(OutOfBounds(point))
+                Err(OutOfBounds(position))
             }
         }
 
-        pub fn possible_moves(&self, start: Point) -> Vec<Action> {
+        pub fn is_valid_move(&self, position: Point, movement: ChessMovement) -> bool {
+            let (chess, dir, cross) = movement.value();
+            if let Ok((player, Option::Some(chess_))) = self.get(position) {
+                if chess_ != chess {
+                    return false;
+                }
+
+                // TODO: no rejection
+                
+                let mut goal = position;
+                for _ in 0..cross {
+                    goal = goal + dir;
+                    if let Ok((_, Option::None)) = self.get(goal) {
+                        continue;
+                    } else {
+                        return false;
+                    }
+                }
+
+                goal = goal + dir;
+                match self.get(goal) {
+                    Err(_) => false,
+                    Ok((_, Option::None)) => true,
+                    Ok((owner, Option::Some(_))) => {
+                        if owner != player {
+                            return true;
+                        } else {
+                            // TODO: field promotion
+                            return false;
+                        }
+                    },
+                }
+            } else {
+                return false;
+            }
+        }
+
+        pub fn possible_actions(&self, position: Point) -> Vec<Action> {
             let mut vec = Vec::<Action>::new();
-            let orths: &'static _ = &[
-                Point( 1, 0),
-                Point(-1, 0),
-                Point( 0, 1),
-                Point( 0,-1),
-            ];
-            let diags: &'static _ = &[
-                Point( 1, 1),
-                Point( 1,-1),
-                Point(-1, 1),
-                Point(-1,-1),
-            ];
 
-            match self.get(start) {
-                Err(_) | Ok((_, Option::None)) => {
-                    vec
-                },
-
-                Ok((player, Option::Some(Chess::Pawn))) => {
-                    for &dir in diags.iter() {
-                        let goal = start + dir;
-                        match self.get(goal) {
-                            Err(_) => {},
-                            Ok((owner, Option::Some(_))) => {
-                                if owner != player {
-                                    vec.push(Action::Capture { player, start, goal });
-                                }
-                                // TODO: field promotion
-                            },
-                            Ok((_, Option::None)) => {
-                                vec.push(Action::Move { player, start, goal });
-                            },
-                        }
+            if let Ok((player, Option::Some(chess))) = self.get(position) {
+                for movement in ChessMovement::possible_actions_of(&chess) {
+                    if self.is_valid_move(position, movement) {
+                        vec.push(Action { player, position, movement });
                     }
-                    vec
-                },
-
-                Ok((player, Option::Some(Chess::Drone))) => {
-                    for &dir in orths.iter() {
-                        let mut goal = start + dir;
-                        match self.get(goal) {
-                            Err(_) => {},
-                            Ok((owner, Option::Some(_))) => {
-                                if owner != player {
-                                    vec.push(Action::Capture { player, start, goal });
-                                }
-                                // TODO: field promotion
-                            },
-                            Ok((_, Option::None)) => {
-                                vec.push(Action::Move { player, start, goal });
-
-                                goal = goal + dir;
-                                match self.get(goal) {
-                                    Err(_) => {},
-                                    Ok((owner, Option::Some(_))) => {
-                                        if owner != self.turn {
-                                            vec.push(Action::Capture { player, start, goal });
-                                        }
-                                        // TODO: field promotion
-                                    },
-                                    Ok((_, Option::None)) => {
-                                        vec.push(Action::Move { player, start, goal });
-                                    },
-                                }
-                            },
-                        }
-                    }
-                    vec
-                },
-
-                Ok((player, Option::Some(Chess::Queen))) => {
-                    for &dir in orths.iter().chain(diags.iter()) {
-                        let mut goal = start;
-                        loop {
-                            goal = goal + dir;
-                            match self.get(goal) {
-                                Err(_) => {},
-                                Ok((owner, Option::Some(_))) => {
-                                    if owner != player {
-                                        vec.push(Action::Capture { player, start, goal });
-                                    }
-                                    // TODO: field promotion
-                                },
-                                Ok((_, Option::None)) => {
-                                    vec.push(Action::Move { player, start, goal });
-                                    continue;
-                                },
-                            }
-                            break;
-                        }
-                    }
-                    vec
-                },
+                }
+                return vec;
+            } else {
+                return vec;
             }
         }
     }
@@ -277,7 +314,7 @@ mod model {
         }
 
         #[test]
-        fn playfield_possible_moves_invalid() {
+        fn playfield_possible_actions_invalid() {
             let p = Option::Some(Chess::Pawn);
             let d = Option::Some(Chess::Drone);
             let q = Option::Some(Chess::Queen);
@@ -313,14 +350,14 @@ mod model {
                 turn: Player::Player2,
             };
 
-            assert_eq!(playfield.possible_moves(Point(3, 2)), vec![]); // empty grid
-            assert_eq!(playfield.possible_moves(Point(2, 5)), vec![]); // out of bounds
-            assert_ne!(playfield.possible_moves(Point(6, 3)), vec![]); // not restricted by turn
-            assert_ne!(playfield2.possible_moves(Point(2, 3)), vec![]); // not restricted by turn
+            assert_eq!(playfield.possible_actions(Point(3, 2)), vec![]); // empty grid
+            assert_eq!(playfield.possible_actions(Point(2, 5)), vec![]); // out of bounds
+            assert_ne!(playfield.possible_actions(Point(6, 3)), vec![]); // not restricted by turn
+            assert_ne!(playfield2.possible_actions(Point(2, 3)), vec![]); // not restricted by turn
         }
 
         #[test]
-        fn playfield_possible_moves_pawn() {
+        fn playfield_possible_actions_pawn() {
             let p = Option::Some(Chess::Pawn);
             let d = Option::Some(Chess::Drone);
             let q = Option::Some(Chess::Queen);
@@ -340,12 +377,15 @@ mod model {
                 scores: [0, 0],
                 turn: Player::Player1,
             };
-            let mut moves = playfield.possible_moves(Point(3, 2));
+            let mut moves = playfield.possible_actions(Point(3, 2));
             let mut expected = vec![
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 3)},
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 3)}, // cross canal
-                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 1)}, // stop by chess
-                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(4, 1)}, // capture chess in the enemy's territory
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::PawnUpRight},
+                // cross canal
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::PawnDownRight},
+                // // stop by chess
+                // Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::PawnUpLeft},
+                // capture chess in the enemy's territory
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::PawnDownLeft},
             ];
             moves.sort();
             expected.sort();
@@ -353,7 +393,7 @@ mod model {
         }
 
         #[test]
-        fn playfield_possible_moves_drone() {
+        fn playfield_possible_actions_drone() {
             let p = Option::Some(Chess::Pawn);
             let d = Option::Some(Chess::Drone);
             let q = Option::Some(Chess::Queen);
@@ -373,16 +413,21 @@ mod model {
                 scores: [0, 0],
                 turn: Player::Player1,
             };
-            let mut moves = playfield.possible_moves(Point(3, 2));
+            let mut moves = playfield.possible_actions(Point(3, 2));
             let mut expected = vec![
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 2)},
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(1, 2)}, // cross an empty grid
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 3)},
-                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 4)}, // stop by boundary
-                // Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(3, 1)}, // stop by chess
-                // Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(3, 0)}, // stop by chess
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 2)}, // cross canal
-                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(5, 2)}, // capture chess in the enemy's territory
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneUp},
+                // cross an empty grid
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneUp2},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneRight},
+                // // stop by boundary
+                // Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneRight2},
+                // // stop by chess
+                // Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneLeft},
+                // Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneLeft2},
+                // cross canal
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneDown},
+                // capture chess in the enemy's territory
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::DroneDown2},
             ];
             moves.sort();
             expected.sort();
@@ -390,7 +435,7 @@ mod model {
         }
 
         #[test]
-        fn playfield_possible_moves_queen() {
+        fn playfield_possible_actions_queen() {
             let p = Option::Some(Chess::Pawn);
             let d = Option::Some(Chess::Drone);
             let q = Option::Some(Chess::Queen);
@@ -410,26 +455,33 @@ mod model {
                 scores: [0, 0],
                 turn: Player::Player1,
             };
-            let mut moves = playfield.possible_moves(Point(3, 2));
+            let mut moves = playfield.possible_actions(Point(3, 2));
             let mut expected = vec![
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 2)},
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(1, 2)}, // cross an empty grid
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(0, 2)}, // cross two empty grids
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 3)},
-                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 4)}, // stop by boundary
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 1)},
-                // Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(3, 0)}, // stop by chess
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 2)}, // cross canal
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(5, 2)}, // cross an empty grid
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(6, 2)}, // cross two empty grids
-                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(7, 2)}, // capture chess in the enemy's territory
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenUp(0)},
+                // cross an empty grid
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenUp(1)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenUp(2)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenRight(0)},
+                // // stop by boundary
+                // Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenRight(1)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenLeft(0)},
+                // // stop by chess
+                // Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenRight(1)},
+                // cross canal
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDown(0)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDown(1)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDown(2)},
+                // capture chess in the enemy's territory
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDown(3)},
 
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 1)}, // diagonal moves
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(1, 0)}, // diagonal moves
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(2, 3)}, // diagonal moves
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 3)}, // diagonal moves
-                Action::Move {player: Player::Player1, start: Point(3, 2), goal: Point(4, 1)}, // diagonal moves
-                Action::Capture {player: Player::Player1, start: Point(3, 2), goal: Point(5, 0)}, // diagonal capture
+                // diagonal moves
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenUpLeft(0)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenUpLeft(1)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenUpRight(0)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDownRight(0)},
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDownLeft(0)},
+                // diagonal capture
+                Action {player: Player::Player1, position: Point(3, 2), movement: ChessMovement::QueenDownLeft(1)},
             ];
             moves.sort();
             expected.sort();
