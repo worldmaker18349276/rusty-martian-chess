@@ -1,30 +1,30 @@
 mod model {
     use std::fmt;
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     enum Chess {
         Pawn,
         Drone,
         Queen,
     }
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     enum Player {
         Player1,
         Player2,
     }
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     pub struct Playfield {
         board : [[Option<Chess>; 4]; 8],
         scores : [i32; 2],
         turn : Player,
     }
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     struct Point(usize, usize);
 
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     enum Action {
         Move {
             start : Point,
