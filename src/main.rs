@@ -130,17 +130,13 @@ mod model {
                     vec
                 },
 
-                Ok((player, _)) if player != self.turn => {
-                    vec
-                },
-
-                Ok((_, Option::Some(Chess::Pawn))) => {
+                Ok((player, Option::Some(Chess::Pawn))) => {
                     for &dir in diags.iter() {
                         let goal = start + dir;
                         match self.get(goal) {
                             Err(_) => {},
                             Ok((owner, Option::Some(_))) => {
-                                if owner != self.turn {
+                                if owner != player {
                                     vec.push(Action::Capture { start, goal });
                                 }
                                 // TODO: field promotion
@@ -153,13 +149,13 @@ mod model {
                     vec
                 },
 
-                Ok((_, Option::Some(Chess::Drone))) => {
+                Ok((player, Option::Some(Chess::Drone))) => {
                     for &dir in orths.iter() {
                         let mut goal = start + dir;
                         match self.get(goal) {
                             Err(_) => {},
                             Ok((owner, Option::Some(_))) => {
-                                if owner != self.turn {
+                                if owner != player {
                                     vec.push(Action::Capture { start, goal });
                                 }
                                 // TODO: field promotion
@@ -186,7 +182,7 @@ mod model {
                     vec
                 },
 
-                Ok((_, Option::Some(Chess::Queen))) => {
+                Ok((player, Option::Some(Chess::Queen))) => {
                     for &dir in orths.iter().chain(diags.iter()) {
                         let mut goal = start;
                         loop {
@@ -194,7 +190,7 @@ mod model {
                             match self.get(goal) {
                                 Err(_) => {},
                                 Ok((owner, Option::Some(_))) => {
-                                    if owner != self.turn {
+                                    if owner != player {
                                         vec.push(Action::Capture { start, goal });
                                     }
                                     // TODO: field promotion
@@ -317,8 +313,8 @@ mod model {
 
             assert_eq!(playfield.possible_moves(Point(3, 2)), vec![]); // empty grid
             assert_eq!(playfield.possible_moves(Point(2, 5)), vec![]); // out of bounds
-            assert_eq!(playfield.possible_moves(Point(6, 3)), vec![]); // invalid owner
-            assert_eq!(playfield2.possible_moves(Point(2, 3)), vec![]); // invalid owner
+            assert_ne!(playfield.possible_moves(Point(6, 3)), vec![]); // not restricted by turn
+            assert_ne!(playfield2.possible_moves(Point(2, 3)), vec![]); // not restricted by turn
         }
 
         #[test]
