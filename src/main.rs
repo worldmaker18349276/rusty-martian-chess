@@ -1,5 +1,6 @@
 mod model {
     use std::fmt;
+    use std::ops::Add;
 
     #[derive(Debug, Copy, Clone, PartialEq)]
     enum Chess {
@@ -24,6 +25,15 @@ mod model {
     #[derive(Debug, Copy, Clone, PartialEq)]
     struct Point(i32, i32);
 
+    impl Add<Point> for Point {
+        type Output = Point;
+
+        fn add(self, other: Point) -> Point {
+            let Point(x, y) = self;
+            Point(x + other.0, y + other.1)
+        }
+    }
+
     #[derive(Debug, Copy, Clone, PartialEq)]
     enum Action {
         Move {
@@ -35,6 +45,9 @@ mod model {
             goal : Point,
         },
     }
+
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    struct OutOfBounds;
 
     impl Chess {
         fn point(&self) -> i32 {
@@ -95,6 +108,15 @@ mod model {
         pub fn is_in_board(&self, point: Point) -> bool {
             point.0 >= 0 && point.0 < 8 && point.1 >= 0 && point.1 < 4
         }
+
+        pub fn get_chess(&self, point: Point) -> Result<Option<Chess>, OutOfBounds> {
+            if !self.is_in_board(point) {
+                Err(OutOfBounds)
+            } else {
+                Ok(self.board[point.0 as usize][point.1 as usize])
+            }
+        }
+
     }
 
     impl fmt::Display for Playfield {
@@ -118,7 +140,13 @@ mod model {
     #[cfg(test)]
     mod tests {
         use super::*;
-    
+
+        #[test]
+        fn point_add() {
+            assert_eq!(Point(1, 2) + Point(3, 4), Point(4, 6));
+            assert_eq!(Point(1, -2) + Point(-3, 4), Point(-2, 2));
+        }
+
         #[test]
         fn player_is_in_territory() {
             let player1 = Player::Player1;
