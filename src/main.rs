@@ -22,7 +22,7 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, PartialEq)]
-    struct Point(usize, usize);
+    struct Point(i32, i32);
 
     #[derive(Debug, Copy, Clone, PartialEq)]
     enum Action {
@@ -63,8 +63,8 @@ mod model {
 
         pub fn is_in_territory(&self, point: Point) -> bool {
             match self {
-                Player::Player1 => point.1 < 4 && point.0 < 4,
-                Player::Player2 => point.1 < 4 && point.0 >= 4 && point.0 < 8,
+                Player::Player1 => point.0 >= 0 && point.0 < 4 && point.1 >= 0 && point.1 < 4,
+                Player::Player2 => point.0 >= 4 && point.0 < 8 && point.1 >= 0 && point.1 < 4,
             }
         }
     }
@@ -93,7 +93,7 @@ mod model {
         }
 
         pub fn is_in_board(&self, point: Point) -> bool {
-            point.1 < 4 && point.0 < 8 
+            point.0 >= 0 && point.0 < 8 && point.1 >= 0 && point.1 < 4
         }
     }
 
@@ -144,8 +144,12 @@ mod model {
             let player1 = Player::Player1;
             let player2 = Player::Player2;
 
+            assert_eq!(player1.is_in_territory(Point(-1, 3)), false);
+            assert_eq!(player2.is_in_territory(Point(-1, 3)), false);
             assert_eq!(player1.is_in_territory(Point(9, 3)), false);
             assert_eq!(player2.is_in_territory(Point(9, 3)), false);
+            assert_eq!(player1.is_in_territory(Point(2, -2)), false);
+            assert_eq!(player2.is_in_territory(Point(2, -2)), false);
             assert_eq!(player1.is_in_territory(Point(2, 4)), false);
             assert_eq!(player2.is_in_territory(Point(2, 4)), false);
         }
@@ -165,7 +169,9 @@ mod model {
         fn playfield_out_of_bounds() {
             let playfield = Playfield::init();
 
+            assert_eq!(playfield.is_in_board(Point(-1, 3)), false);
             assert_eq!(playfield.is_in_board(Point(9, 3)), false);
+            assert_eq!(playfield.is_in_board(Point(2, -2)), false);
             assert_eq!(playfield.is_in_board(Point(2, 4)), false);
         }
     }
