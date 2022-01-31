@@ -2,27 +2,27 @@ mod model {
     use std::fmt;
     use std::ops::Add;
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Chess {
         Pawn,
         Drone,
         Queen,
     }
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Player {
         Player1,
         Player2,
     }
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct Playfield {
         board : [[Option<Chess>; 4]; 8],
         scores : [i32; 2],
         turn : Player,
     }
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub struct Point(pub i32, pub i32);
 
     impl Add<Point> for Point {
@@ -33,7 +33,7 @@ mod model {
         }
     }
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Action {
         Move {
             start : Point,
@@ -45,7 +45,7 @@ mod model {
         },
     }
 
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub struct OutOfBounds(Point);
 
     impl Chess {
