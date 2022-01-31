@@ -21,6 +21,24 @@ mod model {
         turn : Player,
     }
 
+    #[derive(Debug, Copy, Clone)]
+    struct Point {
+        x: i32,
+        y: i32,
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    enum Action {
+        Move {
+            start : Point,
+            goal : Point,
+        },
+        Capture {
+            start : Point,
+            goal : Point,
+        },
+    }
+
     impl Chess {
         fn point(&self) -> i32 {
             match self {
