@@ -91,6 +91,10 @@ mod model {
                 turn : Player::Player1,
             }
         }
+
+        pub fn is_in_board(&self, point: Point) -> bool {
+            point.1 < 4 && point.0 < 8 
+        }
     }
 
     impl fmt::Display for Playfield {
@@ -144,6 +148,25 @@ mod model {
             assert_eq!(player2.is_in_territory(Point(9, 3)), false);
             assert_eq!(player1.is_in_territory(Point(2, 4)), false);
             assert_eq!(player2.is_in_territory(Point(2, 4)), false);
+        }
+
+        #[test]
+        fn playfield_is_in_board() {
+            let playfield = Playfield::init();
+
+            for x in 0..8 {
+                for y in 0..4 {
+                    assert_eq!(playfield.is_in_board(Point(x, y)), true);
+                }
+            }
+        }
+
+        #[test]
+        fn playfield_out_of_bounds() {
+            let playfield = Playfield::init();
+
+            assert_eq!(playfield.is_in_board(Point(9, 3)), false);
+            assert_eq!(playfield.is_in_board(Point(2, 4)), false);
         }
     }
 }
