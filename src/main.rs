@@ -576,6 +576,7 @@ mod tui {
         highlighted: Vec<model::Point>,
         bracketed: Vec<model::Point>,
     }
+
     pub fn draw_board(window: &pancurses::Window, board: &Board) {
         window.clear();
 
@@ -622,6 +623,36 @@ mod tui {
         } else {
             window.addstr(format!("<{}>", board.score2));
         }
+    }
+
+    pub trait Control {
+        fn up(&mut self);
+        fn down(&mut self);
+        fn left(&mut self);
+        fn right(&mut self);
+        fn enter(&mut self);
+    }
+
+    pub fn control<T>(window: &pancurses::Window, controller: &mut T) where T: Control {
+        use pancurses::{endwin, initscr, noecho, Input};
+        let window = initscr();
+        window.printw("Type things, press 'q' to quit\n");
+        window.refresh();
+        window.keypad(true);
+        noecho();
+
+        loop {
+            match window.getch() {
+                Some(Input::Character('q')) => break,
+                Some(Input::KeyUp) => controller.up(),
+                Some(Input::KeyDown) => controller.down(),
+                Some(Input::KeyLeft) => controller.left(),
+                Some(Input::KeyRight) => controller.right(),
+                Some(Input::Character('\n')) => controller.enter(),
+                _ => (),
+            }
+        }
+        endwin();
     }
 }
 
