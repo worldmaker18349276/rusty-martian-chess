@@ -631,6 +631,7 @@ mod tui {
         fn left(&mut self);
         fn right(&mut self);
         fn enter(&mut self);
+        fn render(&mut self, window: &pancurses::Window);
     }
 
     pub fn control<T>(window: &pancurses::Window, controller: &mut T) where T: Control {
@@ -651,6 +652,7 @@ mod tui {
                 Some(Input::Character('\n')) => controller.enter(),
                 _ => (),
             }
+            controller.render(&window);
         }
         endwin();
     }
