@@ -577,6 +577,20 @@ mod tui {
         bracketed: Vec<model::Point>,
     }
 
+    impl<'a> Board<'a> {
+        fn init(playfield: &'a model::Playfield) -> Self {
+            Board {
+                grids: playfield.get_board(),
+                score1: playfield.get_score(model::Player::Player1),
+                score2: playfield.get_score(model::Player::Player2),
+                turn: playfield.get_turn(),
+                cursor: model::Point(0, 0),
+                highlighted: vec![],
+                bracketed: vec![],
+            }
+        }
+    }
+
     pub fn draw_board(window: &pancurses::Window, board: &Board) {
         window.clear();
 
