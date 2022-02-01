@@ -569,6 +569,9 @@ mod tui {
 
     pub struct Board<'a> {
         grids: &'a [[Option<model::Chess>; 4]; 8],
+        score1: &'a i32,
+        score2: &'a i32,
+        turn: &'a model::Player,
         cursor: model::Point,
         highlighted: Vec<model::Point>,
         bracketed: Vec<model::Point>,
@@ -604,6 +607,20 @@ mod tui {
                     window.addstr("]");
                 }
             }
+        }
+
+        window.mv(0, 12);
+        if let model::Player::Player1 = board.turn {
+            window.addstr(format!("<{}>", board.score1));
+        } else {
+            window.addstr(format!(" {} ", board.score1));
+        }
+
+        window.mv(7, 12);
+        if let model::Player::Player1 = board.turn {
+            window.addstr(format!(" {} ", board.score2));
+        } else {
+            window.addstr(format!("<{}>", board.score2));
         }
     }
 }
