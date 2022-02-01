@@ -181,6 +181,12 @@ mod model {
         }
     }
 
+    impl Action {
+        pub fn goal(&self) -> Point {
+            self.position + self.movement.value().1
+        }
+    }
+
     impl Playfield {
         pub fn init() -> Playfield {
             let p = Option::Some(Chess::Pawn);
@@ -567,14 +573,21 @@ mod tui {
     extern crate pancurses;
     use super::model;
 
+    enum ControlState {
+        Pick,
+        Move {
+            position: model::Point,
+            actions: Vec<model::Action>,
+        },
+    }
+
     pub struct Board<'a> {
         grids: &'a [[Option<model::Chess>; 4]; 8],
         score1: &'a i32,
         score2: &'a i32,
         turn: &'a model::Player,
         cursor: model::Point,
-        highlighted: Vec<model::Point>,
-        bracketed: Vec<model::Point>,
+        state: ControlState,
     }
 
     impl<'a> Board<'a> {
@@ -585,57 +598,28 @@ mod tui {
                 score2: playfield.get_score(model::Player::Player2),
                 turn: playfield.get_turn(),
                 cursor: model::Point(0, 0),
-                highlighted: vec![],
-                bracketed: vec![],
-            }
-        }
-    }
-
-    pub fn draw_board(window: &pancurses::Window, board: &Board) {
-        window.clear();
-
-        for y in 0..8 {
-            for x in 0..4 {
-                let sym = match board.grids[y][x] {
-                    Option::Some(model::Chess::Pawn) => "*",
-                    Option::Some(model::Chess::Drone) => "o",
-                    Option::Some(model::Chess::Queen) => "@",
-                    Option::None => ".",
-                };
-                window.mv(y as i32, x as i32 * 2 + 1);
-                if board.highlighted.contains(&model::Point(y as i32, x as i32)) {
-                    window.attron(pancurses::A_BOLD);
-                } else {
-                    window.attroff(pancurses::A_BOLD);
-                }
-                if board.bracketed.contains(&model::Point(y as i32, x as i32)) {
-                    window.attron(pancurses::A_UNDERLINE);
-                } else {
-                    window.attroff(pancurses::A_UNDERLINE);
-                }
-                window.addstr(sym);
-
-                if y as i32 == board.cursor.0 && x as i32 == board.cursor.1 {
-                    window.mv(y as i32, x as i32 * 2);
-                    window.addstr("[");
-                    window.mv(y as i32, x as i32 * 2 + 2);
-                    window.addstr("]");
-                }
+                state: ControlState::Pick,
             }
         }
 
-        window.mv(0, 12);
-        if let model::Player::Player1 = board.turn {
-            window.addstr(format!("<{}>", board.score1));
-        } else {
-            window.addstr(format!(" {} ", board.score1));
+        fn get_highlighted(&self) -> Vec<model::Point> {
+            match &self.state {
+                ControlState::Pick => vec![],
+                ControlState::Move { position, actions } => vec![*position],
+            }
         }
 
-        window.mv(7, 12);
-        if let model::Player::Player1 = board.turn {
-            window.addstr(format!(" {} ", board.score2));
-        } else {
-            window.addstr(format!("<{}>", board.score2));
+        fn get_bracketed(&self) -> Vec<model::Point> {
+            match &self.state {
+                ControlState::Pick => vec![],
+                ControlState::Move { position, actions } => {
+                    let mut res = Vec::new();
+                    for action in actions.iter() {
+                        res.push(action.goal());
+                    }
+                    res
+                },
+            }
         }
     }
 
@@ -657,6 +641,7 @@ mod tui {
         noecho();
 
         loop {
+            controller.render(&window);
             match window.getch() {
                 Some(Input::Character('q')) => break,
                 Some(Input::KeyUp) => controller.up(),
@@ -666,9 +651,88 @@ mod tui {
                 Some(Input::Character('\n')) => controller.enter(),
                 _ => (),
             }
-            controller.render(&window);
         }
         endwin();
+    }
+
+    impl<'a> Control for Board<'a> {
+        fn up(&mut self) {
+            if self.cursor.0 > 0 {
+                self.cursor = self.cursor + model::Point(-1, 0);
+            }
+        }
+
+        fn down(&mut self) {
+            if self.cursor.0 < 7 {
+                self.cursor = self.cursor + model::Point(1, 0);
+            }
+        }
+
+        fn left(&mut self) {
+            if self.cursor.1 > 0 {
+                self.cursor = self.cursor + model::Point(0, -1);
+            }
+        }
+
+        fn right(&mut self) {
+            if self.cursor.1 < 3 {
+                self.cursor = self.cursor + model::Point(0, 1);
+            }
+        }
+
+        fn enter(&mut self) {
+            todo!();
+        }
+
+        fn render(&mut self, window: &pancurses::Window) {
+            window.clear();
+            let highlighted = self.get_highlighted();
+            let bracketed = self.get_bracketed();
+
+            for y in 0..8 {
+                for x in 0..4 {
+                    let sym = match self.grids[y][x] {
+                        Option::Some(model::Chess::Pawn) => "*",
+                        Option::Some(model::Chess::Drone) => "o",
+                        Option::Some(model::Chess::Queen) => "@",
+                        Option::None => ".",
+                    };
+                    window.mv(y as i32, x as i32 * 2 + 1);
+                    if highlighted.contains(&model::Point(y as i32, x as i32)) {
+                        window.attron(pancurses::A_BOLD);
+                    } else {
+                        window.attroff(pancurses::A_BOLD);
+                    }
+                    if bracketed.contains(&model::Point(y as i32, x as i32)) {
+                        window.attron(pancurses::A_UNDERLINE);
+                    } else {
+                        window.attroff(pancurses::A_UNDERLINE);
+                    }
+                    window.addstr(sym);
+    
+                    if y as i32 == self.cursor.0 && x as i32 == self.cursor.1 {
+                        window.mv(y as i32, x as i32 * 2);
+                        window.addstr("[");
+                        window.mv(y as i32, x as i32 * 2 + 2);
+                        window.addstr("]");
+                    }
+                }
+            }
+    
+            window.mv(0, 12);
+            if let model::Player::Player1 = self.turn {
+                window.addstr(format!("<{}>", self.score1));
+            } else {
+                window.addstr(format!(" {} ", self.score1));
+            }
+    
+            window.mv(7, 12);
+            if let model::Player::Player1 = self.turn {
+                window.addstr(format!(" {} ", self.score2));
+            } else {
+                window.addstr(format!("<{}>", self.score2));
+            }
+        }
     }
 }
 
