@@ -571,13 +571,14 @@ mod tui {
         window.clear();
         for y in 0..8 {
             for x in 0..4 {
+                let ch = match playground[y][x] {
+                    Option::Some(model::Chess::Pawn) => ".",
+                    Option::Some(model::Chess::Drone) => "o",
+                    Option::Some(model::Chess::Queen) => "@",
+                    Option::None => " ",
+                };
                 window.mv(y as i32, x as i32 * 2);
-                match playground[y][x] {
-                    Option::Some(model::Chess::Pawn) => { window.addstr("p"); },
-                    Option::Some(model::Chess::Drone) => { window.addstr("d"); },
-                    Option::Some(model::Chess::Queen) => { window.addstr("q"); },
-                    Option::None => { window.addstr("."); },
-                }
+                window.addstr(ch);
             }
         }
     }
