@@ -183,7 +183,8 @@ mod model {
 
     impl Action {
         pub fn goal(&self) -> Point {
-            self.position + self.movement.value().1
+            let (_, dir, cross) = self.movement.value();
+            self.position + dir * (cross as i32 + 1)
         }
     }
 
@@ -302,11 +303,13 @@ mod model {
                 Effect::Move => {
                     self.board[start.0 as usize][start.1 as usize] = Option::None;
                     self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
+                    self.turn = self.turn.next();
                 },
                 Effect::Capture(point) => {
                     self.board[start.0 as usize][start.1 as usize] = Option::None;
                     self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
                     self.scores[self.turn.index()] += point;
+                    self.turn = self.turn.next();
                 },
                 // TODO: field promotion
             }
