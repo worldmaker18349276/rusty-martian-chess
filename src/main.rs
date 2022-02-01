@@ -572,6 +572,7 @@ mod model {
 mod tui {
     extern crate pancurses;
     use super::model;
+    use pancurses::{endwin, initscr, noecho, Input};
 
     enum ControlState {
         Pick,
@@ -599,20 +600,14 @@ mod tui {
         fn get_highlighted(&self) -> Vec<model::Point> {
             match &self.state {
                 ControlState::Pick => vec![],
-                ControlState::Move { position, actions } => vec![*position],
+                ControlState::Move { position, actions: _ } => vec![*position],
             }
         }
 
         fn get_bracketed(&self) -> Vec<model::Point> {
             match &self.state {
                 ControlState::Pick => vec![],
-                ControlState::Move { position, actions } => {
-                    let mut res = Vec::new();
-                    for action in actions.iter() {
-                        res.push(action.goal());
-                    }
-                    res
-                },
+                ControlState::Move { position: _, actions } => actions.iter().map(|action| action.goal()).collect(),
             }
         }
     }
@@ -627,8 +622,6 @@ mod tui {
     }
 
     pub fn control<T>(window: &pancurses::Window, controller: &mut T) where T: Control {
-        use pancurses::{endwin, initscr, noecho, Input};
-        let window = initscr();
         window.printw("Type things, press 'q' to quit\n");
         window.refresh();
         window.keypad(true);
@@ -675,7 +668,27 @@ mod tui {
         }
 
         fn enter(&mut self) {
-            todo!();
+            match (&self.state, self.playfield.get_chess(&self.cursor)) {
+                (_, Err(_)) => {},
+                (ControlState::Pick, Ok((_, Option::None))) => {},
+                (ControlState::Pick, Ok((ref player, Option::Some(_)))) if player != self.playfield.get_turn() => {},
+                (ControlState::Pick, Ok((_, Option::Some(_)))) => {
+                    self.state = ControlState::Move {
+                        position: self.cursor,
+                        actions: self.playfield.possible_actions(&self.cursor),
+                    };
+                },
+                (ControlState::Move { position, actions: _ }, _) if &self.cursor == position => {
+                    self.state = ControlState::Pick;
+                },
+                (ControlState::Move { position: _, actions }, _) => {
+                    if let Option::Some(action) = actions.iter().find(|action| action.goal() == self.cursor) {
+                        if let Ok(()) = self.playfield.apply_action(action) {
+                            self.state = ControlState::Pick;
+                        }
+                    }
+                },
+            }
         }
 
         fn render(&mut self, window: &pancurses::Window) {
@@ -734,7 +747,6 @@ mod tui {
     }
 
     pub fn execute_in_window<T>(func: T) where T: FnOnce(&pancurses::Window) {
-        use pancurses::{endwin, initscr, noecho, Input};
         let window = initscr();
         window.printw("Type things, press 'q' to quit\n");
         window.refresh();
