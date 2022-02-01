@@ -310,6 +310,12 @@ mod model {
 
     impl fmt::Display for Playfield {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", self.scores[0])?;
+            match self.turn {
+                Player::Player1 => write!(f, "*\n")?,
+                Player::Player2 => write!(f, "\n")?,
+            }
+
             for line in self.board.iter() {
                 for grid in line.iter() {
                     match grid {
@@ -322,6 +328,13 @@ mod model {
                 }
                 write!(f, "\n")?;
             }
+
+            write!(f, "{}", self.scores[1])?;
+            match self.turn {
+                Player::Player1 => write!(f, "\n")?,
+                Player::Player2 => write!(f, "*\n")?,
+            }
+
             Ok(())
         }
     }
