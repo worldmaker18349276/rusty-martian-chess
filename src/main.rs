@@ -591,7 +591,7 @@ mod tui {
     }
 
     impl<'a> Board<'a> {
-        fn init(playfield: &'a model::Playfield) -> Self {
+        pub fn init(playfield: &'a model::Playfield) -> Self {
             Board {
                 grids: playfield.get_board(),
                 score1: playfield.get_score(model::Player::Player1),
@@ -734,9 +734,26 @@ mod tui {
             }
         }
     }
+
+    pub fn execute_in_window<T>(func: T) where T: FnOnce(&pancurses::Window) {
+        use pancurses::{endwin, initscr, noecho, Input};
+        let window = initscr();
+        window.printw("Type things, press 'q' to quit\n");
+        window.refresh();
+        window.keypad(true);
+        noecho();
+
+        func(&window);
+
+        endwin();
+    }
 }
 
 fn main() {
-    let playfield = model::Playfield::init();
-    println!("{}", playfield);
+    tui::execute_in_window(|window| {
+        let mut playfield = model::Playfield::init();
+        let mut board = tui::Board::init(&playfield);
+
+        tui::control(&window, &mut board);
+    })
 }
