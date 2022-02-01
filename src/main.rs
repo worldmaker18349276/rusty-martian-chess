@@ -204,17 +204,17 @@ mod model {
             }
         }
 
-        pub fn get_chess(&self, position: Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
+        pub fn get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
             if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
                 Ok((Player::Player1, self.board[position.0 as usize][position.1 as usize]))
             } else if position.0 >= 4 && position.0 < 8 && position.1 >= 0 && position.1 < 4 {
                 Ok((Player::Player2, self.board[position.0 as usize][position.1 as usize]))
             } else {
-                Err(OutOfBounds(position))
+                Err(OutOfBounds(*position))
             }
         }
 
-        pub fn get_effect(&self, position: Point, movement: Movement) -> Option<Effect> {
+        pub fn get_effect(&self, position: &Point, movement: &Movement) -> Option<Effect> {
             let (chess, dir, cross) = movement.value();
             if let Ok((player, Option::Some(chess_))) = self.get_chess(position) {
                 if chess_ != chess {
@@ -223,10 +223,10 @@ mod model {
 
                 // TODO: no rejection
                 
-                let mut goal = position;
+                let mut goal = *position;
                 for _ in 0..cross {
                     goal = goal + dir;
-                    if let Ok((_, Option::None)) = self.get_chess(goal) {
+                    if let Ok((_, Option::None)) = self.get_chess(&goal) {
                         continue;
                     } else {
                         return Option::None;
@@ -234,7 +234,7 @@ mod model {
                 }
 
                 goal = goal + dir;
-                match self.get_chess(goal) {
+                match self.get_chess(&goal) {
                     Err(_) => Option::None,
                     Ok((_, Option::None)) => Option::Some(Effect::Move),
                     Ok((owner, Option::Some(chess))) => {
@@ -251,13 +251,13 @@ mod model {
             }
         }
 
-        pub fn possible_actions(&self, position: Point) -> Vec<Action> {
+        pub fn possible_actions(&self, position: &Point) -> Vec<Action> {
             let mut vec = Vec::<Action>::new();
 
             if let Ok((player, Option::Some(chess))) = self.get_chess(position) {
                 for movement in Movement::possible_movements_of(&chess) {
-                    if let Option::Some(effect) = self.get_effect(position, movement) {
-                        vec.push(Action { player, position, movement, effect });
+                    if let Option::Some(effect) = self.get_effect(position, &movement) {
+                        vec.push(Action { player, position: *position, movement, effect });
                     }
                 }
                 return vec;
@@ -266,13 +266,13 @@ mod model {
             }
         }
 
-        pub fn is_valid_action(&self, action: Action) -> bool {
-            action.player == self.turn && self.get_effect(action.position, action.movement) == Option::Some(action.effect)
+        pub fn is_valid_action(&self, action: &Action) -> bool {
+            action.player == self.turn && self.get_effect(&action.position, &action.movement) == Option::Some(action.effect)
         }
 
-        pub fn apply_action(&mut self, action: Action) -> Result<(), InvalidAction> {
+        pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
             if !self.is_valid_action(action) {
-                return Err(InvalidAction(action));
+                return Err(InvalidAction(*action));
             }
 
             let start = action.position;
@@ -331,7 +331,7 @@ mod model {
             for x in 0..4 {
                 for y in 0..4 {
                     assert!(
-                        match playfield.get_chess(Point(x, y)) {
+                        match playfield.get_chess(&Point(x, y)) {
                             Ok((Player::Player1, _)) => true,
                             _ => false,
                         }
@@ -342,7 +342,7 @@ mod model {
             for x in 4..8 {
                 for y in 0..4 {
                     assert!(
-                        match playfield.get_chess(Point(x, y)) {
+                        match playfield.get_chess(&Point(x, y)) {
                             Ok((Player::Player2, _)) => true,
                             _ => false,
                         }
@@ -355,10 +355,10 @@ mod model {
         fn playfield_get_out_of_bounds() {
             let playfield = Playfield::init();
 
-            assert_eq!(playfield.get_chess(Point(-1, 3)), Err(OutOfBounds(Point(-1, 3))));
-            assert_eq!(playfield.get_chess(Point(9, 3)), Err(OutOfBounds(Point(9, 3))));
-            assert_eq!(playfield.get_chess(Point(2, -2)), Err(OutOfBounds(Point(2, -2))));
-            assert_eq!(playfield.get_chess(Point(2, 4)), Err(OutOfBounds(Point(2, 4))));
+            assert_eq!(playfield.get_chess(&Point(-1, 3)), Err(OutOfBounds(Point(-1, 3))));
+            assert_eq!(playfield.get_chess(&Point(9, 3)), Err(OutOfBounds(Point(9, 3))));
+            assert_eq!(playfield.get_chess(&Point(2, -2)), Err(OutOfBounds(Point(2, -2))));
+            assert_eq!(playfield.get_chess(&Point(2, 4)), Err(OutOfBounds(Point(2, 4))));
         }
 
         #[test]
@@ -398,10 +398,10 @@ mod model {
                 turn: Player::Player2,
             };
 
-            assert_eq!(playfield.possible_actions(Point(3, 2)), vec![]); // empty grid
-            assert_eq!(playfield.possible_actions(Point(2, 5)), vec![]); // out of bounds
-            assert_ne!(playfield.possible_actions(Point(6, 3)), vec![]); // not restricted by turn
-            assert_ne!(playfield2.possible_actions(Point(2, 3)), vec![]); // not restricted by turn
+            assert_eq!(playfield.possible_actions(&Point(3, 2)), vec![]); // empty grid
+            assert_eq!(playfield.possible_actions(&Point(2, 5)), vec![]); // out of bounds
+            assert_ne!(playfield.possible_actions(&Point(6, 3)), vec![]); // not restricted by turn
+            assert_ne!(playfield2.possible_actions(&Point(2, 3)), vec![]); // not restricted by turn
         }
 
         #[test]
@@ -425,7 +425,7 @@ mod model {
                 scores: [0, 0],
                 turn: Player::Player1,
             };
-            let mut moves = playfield.possible_actions(Point(3, 2));
+            let mut moves = playfield.possible_actions(&Point(3, 2));
             let mut expected = vec![
                 Action {player: Player::Player1, position: Point(3, 2), movement: Movement::PawnUpRight, effect: Effect::Move},
                 // cross canal
@@ -461,7 +461,7 @@ mod model {
                 scores: [0, 0],
                 turn: Player::Player1,
             };
-            let mut moves = playfield.possible_actions(Point(3, 2));
+            let mut moves = playfield.possible_actions(&Point(3, 2));
             let mut expected = vec![
                 Action {player: Player::Player1, position: Point(3, 2), movement: Movement::DroneUp, effect: Effect::Move},
                 // cross an empty grid
@@ -503,7 +503,7 @@ mod model {
                 scores: [0, 0],
                 turn: Player::Player1,
             };
-            let mut moves = playfield.possible_actions(Point(3, 2));
+            let mut moves = playfield.possible_actions(&Point(3, 2));
             let mut expected = vec![
                 Action {player: Player::Player1, position: Point(3, 2), movement: Movement::QueenUp(0), effect: Effect::Move},
                 // cross an empty grid
