@@ -567,18 +567,42 @@ mod tui {
     extern crate pancurses;
     use super::model;
 
-    pub fn draw_board(window: &pancurses::Window, playground: &[[Option<model::Chess>; 4]; 8]) {
+    pub struct Board<'a> {
+        grids: &'a [[Option<model::Chess>; 4]; 8],
+        cursor: model::Point,
+        highlighted: Vec<model::Point>,
+        bracketed: Vec<model::Point>,
+    }
+    pub fn draw_board(window: &pancurses::Window, board: &Board) {
         window.clear();
+
         for y in 0..8 {
             for x in 0..4 {
-                let ch = match playground[y][x] {
-                    Option::Some(model::Chess::Pawn) => ".",
+                let sym = match board.grids[y][x] {
+                    Option::Some(model::Chess::Pawn) => "*",
                     Option::Some(model::Chess::Drone) => "o",
                     Option::Some(model::Chess::Queen) => "@",
-                    Option::None => " ",
+                    Option::None => ".",
                 };
-                window.mv(y as i32, x as i32 * 2);
-                window.addstr(ch);
+                window.mv(y as i32, x as i32 * 2 + 1);
+                if board.highlighted.contains(&model::Point(y as i32, x as i32)) {
+                    window.attron(pancurses::A_BOLD);
+                } else {
+                    window.attroff(pancurses::A_BOLD);
+                }
+                if board.bracketed.contains(&model::Point(y as i32, x as i32)) {
+                    window.attron(pancurses::A_UNDERLINE);
+                } else {
+                    window.attroff(pancurses::A_UNDERLINE);
+                }
+                window.addstr(sym);
+
+                if y as i32 == board.cursor.0 && x as i32 == board.cursor.1 {
+                    window.mv(y as i32, x as i32 * 2);
+                    window.addstr("[");
+                    window.mv(y as i32, x as i32 * 2 + 2);
+                    window.addstr("]");
+                }
             }
         }
     }
