@@ -204,6 +204,18 @@ mod model {
             }
         }
 
+        pub fn get_board(&self) -> &[[Option<Chess>; 4]; 8] {
+            &self.board
+        }
+
+        pub fn get_score(&self, player: Player) -> &i32 {
+            &self.scores[player.index()]
+        }
+
+        pub fn get_turn(&self) -> &Player {
+            &self.turn
+        }
+
         pub fn get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
             if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
                 Ok((Player::Player1, self.board[position.0 as usize][position.1 as usize]))
