@@ -563,6 +563,26 @@ mod model {
     }
 }
 
+mod tui {
+    extern crate pancurses;
+    use super::model;
+
+    pub fn draw_board(window: &pancurses::Window, playground: &[[Option<model::Chess>; 4]; 8]) {
+        window.clear();
+        for y in 0..8 {
+            for x in 0..4 {
+                window.mv(y as i32, x as i32 * 2);
+                match playground[y][x] {
+                    Option::Some(model::Chess::Pawn) => { window.addstr("p"); },
+                    Option::Some(model::Chess::Drone) => { window.addstr("d"); },
+                    Option::Some(model::Chess::Queen) => { window.addstr("q"); },
+                    Option::None => { window.addstr("."); },
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let playfield = model::Playfield::init();
     println!("{}", playfield);
