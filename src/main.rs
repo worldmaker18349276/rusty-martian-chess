@@ -582,21 +582,15 @@ mod tui {
     }
 
     pub struct Board<'a> {
-        grids: &'a [[Option<model::Chess>; 4]; 8],
-        score1: &'a i32,
-        score2: &'a i32,
-        turn: &'a model::Player,
+        playfield: &'a mut model::Playfield,
         cursor: model::Point,
         state: ControlState,
     }
 
     impl<'a> Board<'a> {
-        pub fn init(playfield: &'a model::Playfield) -> Self {
+        pub fn init(playfield: &'a mut model::Playfield) -> Self {
             Board {
-                grids: playfield.get_board(),
-                score1: playfield.get_score(model::Player::Player1),
-                score2: playfield.get_score(model::Player::Player2),
-                turn: playfield.get_turn(),
+                playfield: playfield,
                 cursor: model::Point(0, 0),
                 state: ControlState::Pick,
             }
@@ -688,10 +682,14 @@ mod tui {
             window.clear();
             let highlighted = self.get_highlighted();
             let bracketed = self.get_bracketed();
+            let board = self.playfield.get_board();
+            let turn = self.playfield.get_turn();
+            let score1 = self.playfield.get_score(model::Player::Player1);
+            let score2 = self.playfield.get_score(model::Player::Player2);
 
             for y in 0..8 {
                 for x in 0..4 {
-                    let sym = match self.grids[y][x] {
+                    let sym = match board[y][x] {
                         Option::Some(model::Chess::Pawn) => "*",
                         Option::Some(model::Chess::Drone) => "o",
                         Option::Some(model::Chess::Queen) => "@",
@@ -720,17 +718,17 @@ mod tui {
             }
     
             window.mv(0, 12);
-            if let model::Player::Player1 = self.turn {
-                window.addstr(format!("<{}>", self.score1));
+            if let model::Player::Player1 = turn {
+                window.addstr(format!("<{}>", score1));
             } else {
-                window.addstr(format!(" {} ", self.score1));
+                window.addstr(format!(" {} ", score1));
             }
     
             window.mv(7, 12);
-            if let model::Player::Player1 = self.turn {
-                window.addstr(format!(" {} ", self.score2));
+            if let model::Player::Player1 = turn {
+                window.addstr(format!(" {} ", score2));
             } else {
-                window.addstr(format!("<{}>", self.score2));
+                window.addstr(format!("<{}>", score2));
             }
         }
     }
@@ -752,7 +750,7 @@ mod tui {
 fn main() {
     tui::execute_in_window(|window| {
         let mut playfield = model::Playfield::init();
-        let mut board = tui::Board::init(&playfield);
+        let mut board = tui::Board::init(&mut playfield);
 
         tui::control(&window, &mut board);
     })
