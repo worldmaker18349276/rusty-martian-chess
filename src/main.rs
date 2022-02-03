@@ -4,6 +4,7 @@ mod model {
     use std::fmt;
     use std::ops::{Add, Mul};
     use std::vec::Vec;
+    use std::cmp::Ordering;
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Chess {
@@ -18,11 +19,17 @@ mod model {
         Player2,
     }
 
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub enum GameState {
+        Turn(Player),
+        Win(Player),
+    }
+
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
     pub struct Playfield {
         board: [[Option<Chess>; 4]; 8],
         scores: [i32; 2],
-        turn: Player,
+        state: GameState,
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -207,7 +214,7 @@ mod model {
                     [n, d, q, q],
                 ],
                 scores: [0, 0],
-                turn: Player::Player1,
+                state: GameState::Turn(Player::Player1),
             }
         }
 
@@ -219,8 +226,8 @@ mod model {
             &self.scores[player.index()]
         }
 
-        pub fn get_turn(&self) -> &Player {
-            &self.turn
+        pub fn get_state(&self) -> &GameState {
+            &self.state
         }
 
         pub fn get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
@@ -286,43 +293,58 @@ mod model {
         }
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
-            action.player == self.turn && self.get_effect(&action.position, &action.movement) == Option::Some(action.effect)
+            GameState::Turn(action.player) == self.state && self.get_effect(&action.position, &action.movement) == Option::Some(action.effect)
         }
 
         pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
-            if !self.is_valid_action(action) {
-                return Err(InvalidAction(*action));
-            }
+            if let GameState::Turn(player) = self.state {
+                if !self.is_valid_action(action) {
+                    return Err(InvalidAction(*action));
+                }
+                
+                let start = action.position;
+                let (chess, dir, cross) = action.movement.value();
+                // assert_eq!(self.board[start.0 as usize][start.1 as usize], chess);
+                let goal = start + dir * ((cross + 1) as i32);
 
-            let start = action.position;
-            let (chess, dir, cross) = action.movement.value();
-            // assert_eq!(self.board[start.0 as usize][start.1 as usize], chess);
-            let goal = start + dir * ((cross + 1) as i32);
+                match action.effect {
+                    Effect::Move => {
+                        self.board[start.0 as usize][start.1 as usize] = Option::None;
+                        self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
+                    },
+                    Effect::Capture(point) => {
+                        self.board[start.0 as usize][start.1 as usize] = Option::None;
+                        self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
+                        self.scores[player.index()] += point;
+                    },
+                    // TODO: field promotion
+                }
 
-            match action.effect {
-                Effect::Move => {
-                    self.board[start.0 as usize][start.1 as usize] = Option::None;
-                    self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
-                    self.turn = self.turn.next();
-                },
-                Effect::Capture(point) => {
-                    self.board[start.0 as usize][start.1 as usize] = Option::None;
-                    self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
-                    self.scores[self.turn.index()] += point;
-                    self.turn = self.turn.next();
-                },
-                // TODO: field promotion
+                let is_end = self.board[0..4].iter().flatten().all(|grid| grid.is_none()) || self.board[4..8].iter().flatten().all(|grid| grid.is_none());
+                let state = match (is_end, self.scores[0].cmp(&self.scores[1])) {
+                    (true, Ordering::Greater) => GameState::Win(Player::Player1),
+                    (true, Ordering::Less) => GameState::Win(Player::Player2),
+                    (true, Ordering::Equal) => GameState::Win(player),
+                    (false, _) => GameState::Turn(player.next()),
+                };
+                self.state = state;
+
+                Ok(())
+
+            } else {
+                Err(InvalidAction(*action))
             }
-            Ok(())
         }
     }
 
     impl fmt::Display for Playfield {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "{}", self.scores[0])?;
-            match self.turn {
-                Player::Player1 => write!(f, "*\n")?,
-                Player::Player2 => write!(f, "\n")?,
+            match self.state {
+                GameState::Turn(Player::Player1) => write!(f, "*\n")?,
+                GameState::Turn(Player::Player2) => write!(f, "\n")?,
+                GameState::Win(Player::Player1) => write!(f, ", win\n")?,
+                GameState::Win(Player::Player2) => write!(f, "\n")?,
             }
 
             for line in self.board.iter() {
@@ -339,9 +361,11 @@ mod model {
             }
 
             write!(f, "{}", self.scores[1])?;
-            match self.turn {
-                Player::Player1 => write!(f, "\n")?,
-                Player::Player2 => write!(f, "*\n")?,
+            match self.state {
+                GameState::Turn(Player::Player1) => write!(f, "\n")?,
+                GameState::Turn(Player::Player2) => write!(f, "*\n")?,
+                GameState::Win(Player::Player1) => write!(f, "\n")?,
+                GameState::Win(Player::Player2) => write!(f, ", win\n")?,
             }
 
             Ok(())
@@ -414,7 +438,7 @@ mod model {
                     [n, n, n, n],
                 ],
                 scores: [0, 0],
-                turn: Player::Player1,
+                state: GameState::Turn(Player::Player1),
             };
 
             let playfield2 = Playfield {
@@ -429,7 +453,7 @@ mod model {
                     [n, n, n, n],
                 ],
                 scores: [0, 0],
-                turn: Player::Player2,
+                state: GameState::Turn(Player::Player2),
             };
 
             assert_eq!(playfield.possible_actions(&Point(3, 2)), vec![]); // empty grid
@@ -457,7 +481,7 @@ mod model {
                     [n, n, n, n],
                 ],
                 scores: [0, 0],
-                turn: Player::Player1,
+                state: GameState::Turn(Player::Player1),
             };
             let mut moves = playfield.possible_actions(&Point(3, 2));
             let mut expected = vec![
@@ -493,7 +517,7 @@ mod model {
                     [n, n, n, n],
                 ],
                 scores: [0, 0],
-                turn: Player::Player1,
+                state: GameState::Turn(Player::Player1),
             };
             let mut moves = playfield.possible_actions(&Point(3, 2));
             let mut expected = vec![
@@ -535,7 +559,7 @@ mod model {
                     [n, n, d, n],
                 ],
                 scores: [0, 0],
-                turn: Player::Player1,
+                state: GameState::Turn(Player::Player1),
             };
             let mut moves = playfield.possible_actions(&Point(3, 2));
             let mut expected = vec![
@@ -674,7 +698,7 @@ mod tui {
             match (&self.state, self.playfield.get_chess(&self.cursor)) {
                 (_, Err(_)) => {},
                 (ControlState::Pick, Ok((_, Option::None))) => {},
-                (ControlState::Pick, Ok((ref player, Option::Some(_)))) if player != self.playfield.get_turn() => {},
+                (ControlState::Pick, Ok((player, Option::Some(_)))) if &model::GameState::Turn(player) != self.playfield.get_state() => {},
                 (ControlState::Pick, Ok((_, Option::Some(_)))) => {
                     self.state = ControlState::Move {
                         position: self.cursor,
@@ -699,7 +723,7 @@ mod tui {
             let highlighted = self.get_highlighted();
             let bracketed = self.get_bracketed();
             let board = self.playfield.get_board();
-            let turn = self.playfield.get_turn();
+            let state = self.playfield.get_state();
             let score1 = self.playfield.get_score(model::Player::Player1);
             let score2 = self.playfield.get_score(model::Player::Player2);
 
@@ -732,17 +756,19 @@ mod tui {
             }
     
             window.mv(0, 12);
-            if let model::Player::Player1 = turn {
-                window.addstr(format!("<{}>", score1));
-            } else {
-                window.addstr(format!(" {} ", score1));
+            match state {
+                model::GameState::Turn(model::Player::Player1) => { window.addstr(format!("<{}>", score1)); },
+                model::GameState::Turn(model::Player::Player2) => { window.addstr(format!(" {} ", score1)); },
+                model::GameState::Win(model::Player::Player1) => { window.addstr(format!(" {}, win", score1)); },
+                model::GameState::Win(model::Player::Player2) => { window.addstr(format!(" {}, loss", score1)); },
             }
     
             window.mv(7, 12);
-            if let model::Player::Player1 = turn {
-                window.addstr(format!(" {} ", score2));
-            } else {
-                window.addstr(format!("<{}>", score2));
+            match state {
+                model::GameState::Turn(model::Player::Player1) => { window.addstr(format!(" {} ", score2)); },
+                model::GameState::Turn(model::Player::Player2) => { window.addstr(format!("<{}>", score2)); },
+                model::GameState::Win(model::Player::Player1) => { window.addstr(format!(" {}, loss", score2)); },
+                model::GameState::Win(model::Player::Player2) => { window.addstr(format!(" {}, win", score2)); },
             }
         }
     }
