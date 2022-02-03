@@ -225,7 +225,14 @@ mod model {
             &self.board
         }
 
-        pub fn get_score(&self, player: Player) -> &i32 {
+        pub fn get_zone(&self, player: &Player) -> &[[Option<Chess>; 4]] {
+            match player {
+                Player::Player1 => &self.board[0..4],
+                Player::Player2 => &self.board[4..8],
+            }
+        }
+
+        pub fn get_score(&self, player: &Player) -> &i32 {
             &self.scores[player.index()]
         }
 
@@ -280,13 +287,9 @@ mod model {
                                 return Option::None;
                             };
 
-                            let zone = if player == Player::Player1 {
-                                self.board[0..4].iter()
-                            } else {
-                                self.board[4..8].iter()
-                            };
-                            
-                            if zone.flatten().all(|grid| grid != &Option::Some(promoted)) {
+                            let zone = self.get_zone(&player);
+
+                            if zone.iter().flatten().all(|grid| grid != &Option::Some(promoted)) {
                                 return Option::Some(Effect::Promotion(promoted));
                             } else {
                                 return Option::None;
@@ -345,7 +348,9 @@ mod model {
                     },
                 }
 
-                let is_end = self.board[0..4].iter().flatten().all(|grid| grid.is_none()) || self.board[4..8].iter().flatten().all(|grid| grid.is_none());
+                let is_end =
+                    self.get_zone(&Player::Player1).iter().flatten().all(|grid| grid.is_none())
+                    || self.get_zone(&Player::Player2).iter().flatten().all(|grid| grid.is_none());
                 let state = match (is_end, self.scores[0].cmp(&self.scores[1])) {
                     (true, Ordering::Greater) => GameState::Win(Player::Player1),
                     (true, Ordering::Less) => GameState::Win(Player::Player2),
@@ -492,8 +497,8 @@ mod tui {
             let bracketed = self.get_bracketed();
             let board = self.playfield.get_board();
             let state = self.playfield.get_state();
-            let score1 = self.playfield.get_score(model::Player::Player1);
-            let score2 = self.playfield.get_score(model::Player::Player2);
+            let score1 = self.playfield.get_score(&model::Player::Player1);
+            let score2 = self.playfield.get_score(&model::Player::Player2);
 
             for y in 0..8 {
                 for x in 0..4 {
