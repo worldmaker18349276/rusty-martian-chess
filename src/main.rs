@@ -179,6 +179,7 @@ mod model {
         board: [[Option<Chess>; 4]; 8],
         scores: [i32; 2],
         state: GameState,
+        previous: Option<Action>,
     }
 
     impl Playfield {
@@ -201,6 +202,7 @@ mod model {
                 ],
                 scores: [0, 0],
                 state: GameState::Turn(Player::Player1),
+                previous: None,
             }
         }
 
@@ -249,7 +251,6 @@ mod model {
                     if chess_ != chess {
                         return None;
                     }
-                    // TODO: no rejection
                     let mut goal = *position;
                     for _ in 0..cross {
                         goal = goal + dir;
@@ -310,6 +311,8 @@ mod model {
         pub fn is_valid_action(&self, action: &Action) -> bool {
             GameState::Turn(action.player) == self.state
                 && self.get_effect(&action.position, &action.movement) == Some(action.effect)
+                && Some((action.position, action.goal()))
+                    != self.previous.map(|prev| (prev.goal(), prev.position))
         }
 
         pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
@@ -341,6 +344,7 @@ mod model {
                             self.board[goal.0 as usize][goal.1 as usize] = Some(promoted);
                         }
                     }
+                    self.previous = Some(*action);
 
                     let is_end = self
                         .get_zone(&Player::Player1)
@@ -485,7 +489,12 @@ mod tui {
                 (ControlState::Pick, Ok((_, Some(_)))) => {
                     self.state = ControlState::Move {
                         position: self.cursor,
-                        actions: self.playfield.possible_actions(&self.cursor),
+                        actions: self
+                            .playfield
+                            .possible_actions(&self.cursor)
+                            .into_iter()
+                            .filter(|action| self.playfield.is_valid_action(action))
+                            .collect(),
                     };
                 }
                 (
