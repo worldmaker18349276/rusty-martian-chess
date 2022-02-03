@@ -51,22 +51,6 @@ mod model {
         Player2,
     }
 
-    impl Player {
-        fn index(&self) -> usize {
-            match self {
-                Player::Player1 => 0,
-                Player::Player2 => 1,
-            }
-        }
-
-        fn next(&self) -> Player {
-            match self {
-                Player::Player1 => Player::Player2,
-                Player::Player2 => Player::Player1,
-            }
-        }
-    }
-
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Movement {
         PawnUpLeft,
@@ -233,7 +217,10 @@ mod model {
         }
 
         pub fn get_score(&self, player: &Player) -> &i32 {
-            &self.scores[player.index()]
+            match player {
+                Player::Player1 => &self.scores[0],
+                Player::Player2 => &self.scores[1],
+            }
         }
 
         pub fn get_state(&self) -> &GameState {
@@ -340,7 +327,10 @@ mod model {
                     Effect::Capture(point) => {
                         self.board[start.0 as usize][start.1 as usize] = Option::None;
                         self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
-                        self.scores[player.index()] += point;
+                        match player {
+                            Player::Player1 => self.scores[0] += point,
+                            Player::Player2 => self.scores[1] += point,
+                        }
                     },
                     Effect::Promotion(promoted) => {
                         self.board[start.0 as usize][start.1 as usize] = Option::None;
@@ -355,7 +345,10 @@ mod model {
                     (true, Ordering::Greater) => GameState::Win(Player::Player1),
                     (true, Ordering::Less) => GameState::Win(Player::Player2),
                     (true, Ordering::Equal) => GameState::Win(player),
-                    (false, _) => GameState::Turn(player.next()),
+                    (false, _) => match player {
+                        Player::Player1 => GameState::Turn(Player::Player2),
+                        Player::Player2 => GameState::Turn(Player::Player1),
+                    },
                 };
                 self.state = state;
 
