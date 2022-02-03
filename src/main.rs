@@ -145,7 +145,7 @@ mod model {
     pub enum Effect {
         Move,
         Capture(i32),
-        // Promotion,
+        Promotion(Chess),
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -263,12 +263,31 @@ mod model {
                 match self.get_chess(&goal) {
                     Err(_) => Option::None,
                     Ok((_, Option::None)) => Option::Some(Effect::Move),
-                    Ok((owner, Option::Some(chess))) => {
+                    Ok((owner, Option::Some(captured))) => {
                         if owner != player {
-                            return Option::Some(Effect::Capture(chess.point()));
+                            return Option::Some(Effect::Capture(captured.point()));
                         } else {
-                            // TODO: field promotion
-                            return Option::None;
+                            let promoted = if chess == Chess::Pawn && captured == Chess::Pawn {
+                                Chess::Drone
+                            } else if chess == Chess::Pawn && captured == Chess::Drone {
+                                Chess::Queen
+                            } else if chess == Chess::Drone && captured == Chess::Pawn {
+                                Chess::Queen
+                            } else {
+                                return Option::None;
+                            };
+
+                            let territory = if player == Player::Player1 {
+                                self.board[0..4].iter()
+                            } else {
+                                self.board[4..8].iter()
+                            };
+                            
+                            if territory.flatten().all(|grid| grid != &Option::Some(promoted)) {
+                                return Option::Some(Effect::Promotion(promoted));
+                            } else {
+                                return Option::None;
+                            }
                         }
                     },
                 }
@@ -317,7 +336,10 @@ mod model {
                         self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
                         self.scores[player.index()] += point;
                     },
-                    // TODO: field promotion
+                    Effect::Promotion(promoted) => {
+                        self.board[start.0 as usize][start.1 as usize] = Option::None;
+                        self.board[goal.0 as usize][goal.1 as usize] = Option::Some(promoted);
+                    },
                 }
 
                 let is_end = self.board[0..4].iter().flatten().all(|grid| grid.is_none()) || self.board[4..8].iter().flatten().all(|grid| grid.is_none());
