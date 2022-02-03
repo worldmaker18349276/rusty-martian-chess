@@ -184,9 +184,9 @@ mod model {
 
     impl Playfield {
         pub fn init() -> Playfield {
-            let p = Option::Some(Chess::Pawn);
-            let d = Option::Some(Chess::Drone);
-            let q = Option::Some(Chess::Queen);
+            let p = Some(Chess::Pawn);
+            let d = Some(Chess::Drone);
+            let q = Some(Chess::Queen);
             let n = Option::<Chess>::None;
 
             Playfield {
@@ -239,123 +239,123 @@ mod model {
 
         pub fn get_effect(&self, position: &Point, movement: &Movement) -> Option<Effect> {
             let (chess, dir, cross) = movement.value();
-            if let Ok((player, Option::Some(chess_))) = self.get_chess(position) {
-                if chess_ != chess {
-                    return Option::None;
-                }
-
-                // TODO: no rejection
-                
-                let mut goal = *position;
-                for _ in 0..cross {
-                    goal = goal + dir;
-                    if let Ok((_, Option::None)) = self.get_chess(&goal) {
-                        continue;
-                    } else {
-                        return Option::None;
+            match self.get_chess(position) {
+                Ok((player, Some(chess_))) => {
+                    if chess_ != chess {
+                        return None;
                     }
-                }
-
-                goal = goal + dir;
-                match self.get_chess(&goal) {
-                    Err(_) => Option::None,
-                    Ok((_, Option::None)) => Option::Some(Effect::Move),
-                    Ok((owner, Option::Some(captured))) => {
-                        if owner != player {
-                            return Option::Some(Effect::Capture(captured.point()));
-                        } else {
-                            let promoted = if chess == Chess::Pawn && captured == Chess::Pawn {
-                                Chess::Drone
-                            } else if chess == Chess::Pawn && captured == Chess::Drone {
-                                Chess::Queen
-                            } else if chess == Chess::Drone && captured == Chess::Pawn {
-                                Chess::Queen
-                            } else {
-                                return Option::None;
-                            };
-
-                            let zone = self.get_zone(&player);
-
-                            if zone.iter().flatten().all(|grid| grid != &Option::Some(promoted)) {
-                                return Option::Some(Effect::Promotion(promoted));
-                            } else {
-                                return Option::None;
-                            }
+    
+                    // TODO: no rejection
+                    
+                    let mut goal = *position;
+                    for _ in 0..cross {
+                        goal = goal + dir;
+                        match self.get_chess(&goal) {
+                            Ok((_, None)) => continue,
+                            _ => return None,
                         }
-                    },
-                }
-            } else {
-                return Option::None;
+                    }
+    
+                    goal = goal + dir;
+                    match self.get_chess(&goal) {
+                        Err(_) => None,
+                        Ok((_, None)) => Some(Effect::Move),
+                        Ok((owner, Some(captured))) => {
+                            if owner != player {
+                                return Some(Effect::Capture(captured.point()));
+                            } else {
+                                let promoted = if chess == Chess::Pawn && captured == Chess::Pawn {
+                                    Chess::Drone
+                                } else if chess == Chess::Pawn && captured == Chess::Drone {
+                                    Chess::Queen
+                                } else if chess == Chess::Drone && captured == Chess::Pawn {
+                                    Chess::Queen
+                                } else {
+                                    return None;
+                                };
+    
+                                let zone = self.get_zone(&player);
+    
+                                if zone.iter().flatten().all(|grid| grid != &Some(promoted)) {
+                                    return Some(Effect::Promotion(promoted));
+                                } else {
+                                    return None;
+                                }
+                            }
+                        },
+                    }
+                },
+                _ => return None,
             }
         }
 
         pub fn possible_actions(&self, position: &Point) -> Vec<Action> {
             let mut vec = Vec::<Action>::new();
 
-            if let Ok((player, Option::Some(chess))) = self.get_chess(position) {
+            if let Ok((player, Some(chess))) = self.get_chess(position) {
                 for movement in Movement::possible_movements_of(&chess) {
-                    if let Option::Some(effect) = self.get_effect(position, &movement) {
+                    if let Some(effect) = self.get_effect(position, &movement) {
                         vec.push(Action { player, position: *position, movement, effect });
                     }
                 }
-                return vec;
-            } else {
-                return vec;
             }
+            return vec;
         }
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
-            GameState::Turn(action.player) == self.state && self.get_effect(&action.position, &action.movement) == Option::Some(action.effect)
+            GameState::Turn(action.player) == self.state
+            && self.get_effect(&action.position, &action.movement) == Some(action.effect)
         }
 
         pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
-            if let GameState::Turn(player) = self.state {
-                if !self.is_valid_action(action) {
-                    return Err(InvalidAction(*action));
-                }
-                
-                let start = action.position;
-                let (chess, dir, cross) = action.movement.value();
-                // assert_eq!(self.board[start.0 as usize][start.1 as usize], chess);
-                let goal = start + dir * ((cross + 1) as i32);
-
-                match action.effect {
-                    Effect::Move => {
-                        self.board[start.0 as usize][start.1 as usize] = Option::None;
-                        self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
-                    },
-                    Effect::Capture(point) => {
-                        self.board[start.0 as usize][start.1 as usize] = Option::None;
-                        self.board[goal.0 as usize][goal.1 as usize] = Option::Some(chess);
-                        match player {
-                            Player::Player1 => self.scores[0] += point,
-                            Player::Player2 => self.scores[1] += point,
-                        }
-                    },
-                    Effect::Promotion(promoted) => {
-                        self.board[start.0 as usize][start.1 as usize] = Option::None;
-                        self.board[goal.0 as usize][goal.1 as usize] = Option::Some(promoted);
-                    },
-                }
-
-                let is_end =
-                    self.get_zone(&Player::Player1).iter().flatten().all(|grid| grid.is_none())
-                    || self.get_zone(&Player::Player2).iter().flatten().all(|grid| grid.is_none());
-                let state = match (is_end, self.scores[0].cmp(&self.scores[1])) {
-                    (true, Ordering::Greater) => GameState::Win(Player::Player1),
-                    (true, Ordering::Less) => GameState::Win(Player::Player2),
-                    (true, Ordering::Equal) => GameState::Win(player),
-                    (false, _) => match player {
-                        Player::Player1 => GameState::Turn(Player::Player2),
-                        Player::Player2 => GameState::Turn(Player::Player1),
-                    },
-                };
-                self.state = state;
-
-                Ok(())
-
-            } else {
-                Err(InvalidAction(*action))
+            match self.state {
+                GameState::Win(_) => Err(InvalidAction(*action)),
+                GameState::Turn(player) => {
+                    if !self.is_valid_action(action) {
+                        return Err(InvalidAction(*action));
+                    }
+                    
+                    let start = action.position;
+                    let (chess, dir, cross) = action.movement.value();
+                    // assert_eq!(self.board[start.0 as usize][start.1 as usize], chess);
+                    let goal = start + dir * ((cross + 1) as i32);
+    
+                    match action.effect {
+                        Effect::Move => {
+                            self.board[start.0 as usize][start.1 as usize] = None;
+                            self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
+                        },
+                        Effect::Capture(point) => {
+                            self.board[start.0 as usize][start.1 as usize] = None;
+                            self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
+                            match player {
+                                Player::Player1 => self.scores[0] += point,
+                                Player::Player2 => self.scores[1] += point,
+                            }
+                        },
+                        Effect::Promotion(promoted) => {
+                            self.board[start.0 as usize][start.1 as usize] = None;
+                            self.board[goal.0 as usize][goal.1 as usize] = Some(promoted);
+                        },
+                    }
+    
+                    let is_end =
+                        self.get_zone(&Player::Player1).iter().flatten().all(Option::is_none)
+                        || self.get_zone(&Player::Player2).iter().flatten().all(Option::is_none);
+    
+                    self.state = match (is_end, self.scores[0].cmp(&self.scores[1])) {
+                        (true, Ordering::Greater) => GameState::Win(Player::Player1),
+                        (true, Ordering::Less) => GameState::Win(Player::Player2),
+                        (true, Ordering::Equal) => GameState::Win(player),
+                        (false, _) => match player {
+                            Player::Player1 => GameState::Turn(Player::Player2),
+                            Player::Player2 => GameState::Turn(Player::Player1),
+                        },
+                    };
+    
+                    Ok(())
+    
+                },
             }
         }
     }
@@ -463,9 +463,9 @@ mod tui {
         fn enter(&mut self) {
             match (&self.state, self.playfield.get_chess(&self.cursor)) {
                 (_, Err(_)) => {},
-                (ControlState::Pick, Ok((_, Option::None))) => {},
-                (ControlState::Pick, Ok((player, Option::Some(_)))) if &model::GameState::Turn(player) != self.playfield.get_state() => {},
-                (ControlState::Pick, Ok((_, Option::Some(_)))) => {
+                (ControlState::Pick, Ok((_, None))) => {},
+                (ControlState::Pick, Ok((player, Some(_)))) if &model::GameState::Turn(player) != self.playfield.get_state() => {},
+                (ControlState::Pick, Ok((_, Some(_)))) => {
                     self.state = ControlState::Move {
                         position: self.cursor,
                         actions: self.playfield.possible_actions(&self.cursor),
@@ -475,7 +475,7 @@ mod tui {
                     self.state = ControlState::Pick;
                 },
                 (ControlState::Move { position: _, actions }, _) => {
-                    if let Option::Some(action) = actions.iter().find(|action| action.goal() == self.cursor) {
+                    if let Some(action) = actions.iter().find(|action| action.goal() == self.cursor) {
                         if let Ok(()) = self.playfield.apply_action(action) {
                             self.state = ControlState::Pick;
                         }
@@ -496,10 +496,10 @@ mod tui {
             for y in 0..8 {
                 for x in 0..4 {
                     let sym = match board[y][x] {
-                        Option::Some(model::Chess::Pawn) => "*",
-                        Option::Some(model::Chess::Drone) => "o",
-                        Option::Some(model::Chess::Queen) => "@",
-                        Option::None => ".",
+                        Some(model::Chess::Pawn) => "*",
+                        Some(model::Chess::Drone) => "o",
+                        Some(model::Chess::Queen) => "@",
+                        None => ".",
                     };
                     window.mv(y as i32, x as i32 * 2 + 1);
                     if highlighted.contains(&Point(y as i32, x as i32)) {
