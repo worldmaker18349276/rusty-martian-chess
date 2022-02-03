@@ -35,23 +35,36 @@ mod model {
         Queen,
     }
 
+    impl Chess {
+        fn point(&self) -> i32 {
+            match self {
+                Chess::Pawn => 1,
+                Chess::Drone => 2,
+                Chess::Queen => 3,
+            }
+        }
+    }
+
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Player {
         Player1,
         Player2,
     }
 
-    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub enum GameState {
-        Turn(Player),
-        Win(Player),
-    }
+    impl Player {
+        fn index(&self) -> usize {
+            match self {
+                Player::Player1 => 0,
+                Player::Player2 => 1,
+            }
+        }
 
-    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-    pub struct Playfield {
-        board: [[Option<Chess>; 4]; 8],
-        scores: [i32; 2],
-        state: GameState,
+        fn next(&self) -> Player {
+            match self {
+                Player::Player1 => Player::Player2,
+                Player::Player2 => Player::Player1,
+            }
+        }
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -159,43 +172,30 @@ mod model {
         effect: Effect,
     }
 
+    impl Action {
+        pub fn goal(&self) -> Point {
+            let (_, dir, cross) = self.movement.value();
+            self.position + dir * (cross as i32 + 1)
+        }
+    }
+
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub struct OutOfBounds(Point);
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub struct InvalidAction(Action);
     
-    impl Chess {
-        fn point(&self) -> i32 {
-            match self {
-                Chess::Pawn => 1,
-                Chess::Drone => 2,
-                Chess::Queen => 3,
-            }
-        }
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub enum GameState {
+        Turn(Player),
+        Win(Player),
     }
 
-    impl Player {
-        fn index(&self) -> usize {
-            match self {
-                Player::Player1 => 0,
-                Player::Player2 => 1,
-            }
-        }
-
-        fn next(&self) -> Player {
-            match self {
-                Player::Player1 => Player::Player2,
-                Player::Player2 => Player::Player1,
-            }
-        }
-    }
-
-    impl Action {
-        pub fn goal(&self) -> Point {
-            let (_, dir, cross) = self.movement.value();
-            self.position + dir * (cross as i32 + 1)
-        }
+    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    pub struct Playfield {
+        board: [[Option<Chess>; 4]; 8],
+        scores: [i32; 2],
+        state: GameState,
     }
 
     impl Playfield {
@@ -280,13 +280,13 @@ mod model {
                                 return Option::None;
                             };
 
-                            let territory = if player == Player::Player1 {
+                            let zone = if player == Player::Player1 {
                                 self.board[0..4].iter()
                             } else {
                                 self.board[4..8].iter()
                             };
                             
-                            if territory.flatten().all(|grid| grid != &Option::Some(promoted)) {
+                            if zone.flatten().all(|grid| grid != &Option::Some(promoted)) {
                                 return Option::Some(Effect::Promotion(promoted));
                             } else {
                                 return Option::None;
