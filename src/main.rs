@@ -714,16 +714,14 @@ mod tui {
                     window.mv(y as i32, x as i32 * 2 + 1);
                     if highlighted.contains(&model::Point(y as i32, x as i32)) {
                         window.attron(pancurses::A_BOLD);
-                    } else {
-                        window.attroff(pancurses::A_BOLD);
                     }
                     if bracketed.contains(&model::Point(y as i32, x as i32)) {
                         window.attron(pancurses::A_UNDERLINE);
-                    } else {
-                        window.attroff(pancurses::A_UNDERLINE);
                     }
                     window.addstr(sym);
-    
+                    window.attroff(pancurses::A_BOLD);
+                    window.attroff(pancurses::A_UNDERLINE);
+
                     if y as i32 == self.cursor.0 && x as i32 == self.cursor.1 {
                         window.mv(y as i32, x as i32 * 2);
                         window.addstr("[");
