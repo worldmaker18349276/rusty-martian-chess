@@ -1,10 +1,33 @@
 #[allow(unused)]
 
+mod utils {
+    use std::ops::{Add, Mul};
+
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub struct Point(pub i32, pub i32);
+
+    impl Add<Point> for Point {
+        type Output = Point;
+
+        fn add(self, other: Point) -> Point {
+            Point(self.0 + other.0, self.1 + other.1)
+        }
+    }
+
+    impl Mul<i32> for Point {
+        type Output = Point;
+
+        fn mul(self, other: i32) -> Point {
+            Point(self.0 * other, self.1 * other)
+        }
+    }
+}
+
 mod model {
     use std::fmt;
-    use std::ops::{Add, Mul};
     use std::vec::Vec;
     use std::cmp::Ordering;
+    use super::utils::Point;
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Chess {
@@ -30,25 +53,6 @@ mod model {
         board: [[Option<Chess>; 4]; 8],
         scores: [i32; 2],
         state: GameState,
-    }
-
-    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub struct Point(pub i32, pub i32);
-
-    impl Add<Point> for Point {
-        type Output = Point;
-
-        fn add(self, other: Point) -> Point {
-            Point(self.0 + other.0, self.1 + other.1)
-        }
-    }
-
-    impl Mul<i32> for Point {
-        type Output = Point;
-
-        fn mul(self, other: i32) -> Point {
-            Point(self.0 * other, self.1 * other)
-        }
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -621,19 +625,20 @@ mod model {
 mod tui {
     extern crate pancurses;
     use super::model;
+    use super::utils::Point;
     use pancurses::{endwin, initscr, noecho, Input};
 
     enum ControlState {
         Pick,
         Move {
-            position: model::Point,
+            position: Point,
             actions: Vec<model::Action>,
         },
     }
 
     pub struct Board<'a> {
         playfield: &'a mut model::Playfield,
-        cursor: model::Point,
+        cursor: Point,
         state: ControlState,
     }
 
@@ -641,19 +646,19 @@ mod tui {
         pub fn init(playfield: &'a mut model::Playfield) -> Self {
             Board {
                 playfield: playfield,
-                cursor: model::Point(0, 0),
+                cursor: Point(0, 0),
                 state: ControlState::Pick,
             }
         }
 
-        fn get_highlighted(&self) -> Vec<model::Point> {
+        fn get_highlighted(&self) -> Vec<Point> {
             match &self.state {
                 ControlState::Pick => vec![],
                 ControlState::Move { position, actions: _ } => vec![*position],
             }
         }
 
-        fn get_bracketed(&self) -> Vec<model::Point> {
+        fn get_bracketed(&self) -> Vec<Point> {
             match &self.state {
                 ControlState::Pick => vec![],
                 ControlState::Move { position: _, actions } => actions.iter().map(|action| action.goal()).collect(),
@@ -694,25 +699,25 @@ mod tui {
     impl<'a> Control for Board<'a> {
         fn up(&mut self) {
             if self.cursor.0 > 0 {
-                self.cursor = self.cursor + model::Point(-1, 0);
+                self.cursor = self.cursor + Point(-1, 0);
             }
         }
 
         fn down(&mut self) {
             if self.cursor.0 < 7 {
-                self.cursor = self.cursor + model::Point(1, 0);
+                self.cursor = self.cursor + Point(1, 0);
             }
         }
 
         fn left(&mut self) {
             if self.cursor.1 > 0 {
-                self.cursor = self.cursor + model::Point(0, -1);
+                self.cursor = self.cursor + Point(0, -1);
             }
         }
 
         fn right(&mut self) {
             if self.cursor.1 < 3 {
-                self.cursor = self.cursor + model::Point(0, 1);
+                self.cursor = self.cursor + Point(0, 1);
             }
         }
 
@@ -758,10 +763,10 @@ mod tui {
                         Option::None => ".",
                     };
                     window.mv(y as i32, x as i32 * 2 + 1);
-                    if highlighted.contains(&model::Point(y as i32, x as i32)) {
+                    if highlighted.contains(&Point(y as i32, x as i32)) {
                         window.attron(pancurses::A_BOLD);
                     }
-                    if bracketed.contains(&model::Point(y as i32, x as i32)) {
+                    if bracketed.contains(&Point(y as i32, x as i32)) {
                         window.attron(pancurses::A_UNDERLINE);
                     }
                     window.addstr(sym);
