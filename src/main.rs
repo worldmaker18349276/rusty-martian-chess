@@ -23,6 +23,7 @@ mod utils {
 
 mod model {
     use super::utils::Point;
+    use super::algo::Decidable;
     use std::cmp::Ordering;
     use std::vec::Vec;
 
@@ -241,7 +242,7 @@ mod model {
             &self.state
         }
 
-        pub fn get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
+        pub fn try_get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
             if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
                 Ok((
                     Player::Player1,
@@ -257,24 +258,24 @@ mod model {
             }
         }
 
-        pub fn get_effect(
+        pub fn try_get_effect(
             &self,
             position: &Point,
             movement: &Movement,
         ) -> Result<Effect, InvalidMovement> {
             let (chess, dir, cross) = movement.value();
-            match self.get_chess(position) {
+            match self.try_get_chess(position) {
                 Ok((player, Some(chess_))) if chess_ == chess => {
                     let mut goal = *position;
                     for _ in 0..cross {
                         goal = goal + dir;
-                        match self.get_chess(&goal) {
+                        match self.try_get_chess(&goal) {
                             Ok((_, None)) => continue,
                             _ => return Err(InvalidMovement),
                         }
                     }
                     goal = goal + dir;
-                    match self.get_chess(&goal) {
+                    match self.try_get_chess(&goal) {
                         Err(_) => Err(InvalidMovement),
                         Ok((_, None)) => Ok(Effect::Move),
                         Ok((owner, Some(captured))) => {
@@ -307,9 +308,9 @@ mod model {
         pub fn possible_actions_at(&self, position: &Point) -> Vec<Action> {
             let mut vec = Vec::<Action>::new();
 
-            if let Ok((player, Some(chess))) = self.get_chess(position) {
+            if let Ok((player, Some(chess))) = self.try_get_chess(position) {
                 for movement in Movement::possible_movements_of(&chess) {
-                    if let Ok(effect) = self.get_effect(position, &movement) {
+                    if let Ok(effect) = self.try_get_effect(position, &movement) {
                         vec.push(Action {
                             player,
                             position: *position,
@@ -325,34 +326,12 @@ mod model {
         pub fn is_valid_action(&self, action: &Action) -> bool {
             GameState::Turn(action.player) == self.state
                 && self.is_in_zone(&action.position, &action.player)
-                && self.get_effect(&action.position, &action.movement) == Ok(action.effect)
+                && self.try_get_effect(&action.position, &action.movement) == Ok(action.effect)
                 && Some((action.position, action.goal()))
                     != self.previous.map(|prev| (prev.goal(), prev.position))
         }
 
-        pub fn valid_actions(&self) -> Vec<Action> {
-            let mut res = Vec::new();
-            match self.state {
-                GameState::Turn(player) => {
-                    let rng = match player {
-                        Player::Player1 => 0..4,
-                        Player::Player2 => 4..8,
-                    };
-                    for y in rng {
-                        for x in 0..4 {
-                            res.append(&mut self.possible_actions_at(&Point(y, x)))
-                        }
-                    }
-                }
-                GameState::Win(_) => {}
-            }
-            return res
-                .into_iter()
-                .filter(|action| self.is_valid_action(action))
-                .collect();
-        }
-
-        pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
+        pub fn try_apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
             match self.state {
                 GameState::Turn(player) if self.is_valid_action(action) => {
                     let start = action.position;
@@ -403,6 +382,43 @@ mod model {
                 }
                 _ => Err(InvalidAction),
             }
+        }
+    }
+
+    impl Decidable for Playfield {
+        type Action = Action;
+        type Score = i32;
+
+        fn valid_actions(&self) -> Vec<Self::Action> {
+            let mut res = Vec::new();
+            match self.state {
+                GameState::Turn(player) => {
+                    let rng = match player {
+                        Player::Player1 => 0..4,
+                        Player::Player2 => 4..8,
+                    };
+                    for y in rng {
+                        for x in 0..4 {
+                            res.append(&mut self.possible_actions_at(&Point(y, x)))
+                        }
+                    }
+                }
+                GameState::Win(_) => {}
+            }
+            return res
+                .into_iter()
+                .filter(|action| self.is_valid_action(action))
+                .collect();
+        }
+
+        fn apply_action(&self, action: &Self::Action) -> Self {
+            let mut state = self.clone();
+            state.try_apply_action(action).unwrap();
+            state
+        }
+
+        fn score(&self) -> Self::Score {
+            return self.scores[0] - self.scores[1];
         }
     }
 }
@@ -516,7 +532,7 @@ mod tui {
         }
 
         fn enter(&mut self) {
-            match (&self.state, self.playfield.get_chess(&self.cursor)) {
+            match (&self.state, self.playfield.try_get_chess(&self.cursor)) {
                 (_, Err(_)) => {}
                 (ControlState::Pick, Ok((_, None))) => {}
                 (ControlState::Pick, Ok((player, Some(_))))
@@ -550,7 +566,7 @@ mod tui {
                 ) => {
                     if let Some(action) = actions.iter().find(|action| action.goal() == self.cursor)
                     {
-                        if let Ok(()) = self.playfield.apply_action(action) {
+                        if let Ok(()) = self.playfield.try_apply_action(action) {
                             self.state = ControlState::Pick;
                         }
                     }
