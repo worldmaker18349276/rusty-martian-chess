@@ -430,7 +430,7 @@ mod tui {
     impl<'a> Board<'a> {
         pub fn init(playfield: &'a mut model::Playfield) -> Self {
             Board {
-                playfield: playfield,
+                playfield,
                 cursor: Point(0, 0),
                 state: ControlState::Pick,
             }
@@ -559,6 +559,8 @@ mod tui {
         }
 
         fn render(&mut self, window: &pancurses::Window) {
+            let offset: &'a _ = &(2, 2);
+
             window.clear();
             let highlighted = self.get_highlighted();
             let bracketed = self.get_bracketed();
@@ -575,26 +577,26 @@ mod tui {
                         Some(model::Chess::Queen) => "@",
                         None => ".",
                     };
-                    window.mv(y as i32, x as i32 * 2 + 1);
                     if highlighted.contains(&Point(y as i32, x as i32)) {
                         window.attron(pancurses::A_BOLD);
                     }
                     if bracketed.contains(&Point(y as i32, x as i32)) {
                         window.attron(pancurses::A_UNDERLINE);
                     }
+                    window.mv(y as i32 + offset.0, x as i32 * 2 + 1 + offset.1);
                     window.addstr(sym);
                     window.attroff(pancurses::A_BOLD);
                     window.attroff(pancurses::A_UNDERLINE);
 
                     if y as i32 == self.cursor.0 && x as i32 == self.cursor.1 {
-                        window.mv(y as i32, x as i32 * 2);
+                        window.mv(y as i32 + offset.0, x as i32 * 2 + offset.1);
                         window.addstr("[");
-                        window.mv(y as i32, x as i32 * 2 + 2);
+                        window.mv(y as i32 + offset.0, x as i32 * 2 + 2 + offset.1);
                         window.addstr("]");
                     }
                 }
             }
-            window.mv(0, 12);
+            window.mv(0 + offset.0, 12 + offset.1);
             match state {
                 model::GameState::Turn(model::Player::Player1) => {
                     window.addstr(format!("<{}>", score1));
@@ -603,13 +605,13 @@ mod tui {
                     window.addstr(format!(" {} ", score1));
                 }
                 model::GameState::Win(model::Player::Player1) => {
-                    window.addstr(format!(" {}, win", score1));
+                    window.addstr(format!(" {}  win", score1));
                 }
                 model::GameState::Win(model::Player::Player2) => {
-                    window.addstr(format!(" {}, loss", score1));
+                    window.addstr(format!(" {}  loss", score1));
                 }
             }
-            window.mv(7, 12);
+            window.mv(7 + offset.0, 12 + offset.1);
             match state {
                 model::GameState::Turn(model::Player::Player1) => {
                     window.addstr(format!(" {} ", score2));
@@ -618,10 +620,10 @@ mod tui {
                     window.addstr(format!("<{}>", score2));
                 }
                 model::GameState::Win(model::Player::Player1) => {
-                    window.addstr(format!(" {}, loss", score2));
+                    window.addstr(format!(" {}  loss", score2));
                 }
                 model::GameState::Win(model::Player::Player2) => {
-                    window.addstr(format!(" {}, win", score2));
+                    window.addstr(format!(" {}  win", score2));
                 }
             }
         }
@@ -632,7 +634,6 @@ mod tui {
         T: FnOnce(&pancurses::Window),
     {
         let window = initscr();
-        window.printw("Type things, press 'q' to quit\n");
         window.refresh();
         window.keypad(true);
         noecho();
