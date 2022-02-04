@@ -1,5 +1,3 @@
-#[allow(unused)]
-
 mod utils {
     use std::ops::{Add, Mul};
 
@@ -221,6 +219,17 @@ mod model {
             }
         }
 
+        pub fn is_in_zone(&self, position: &Point, player: &Player) -> bool {
+            match player {
+                Player::Player1 => {
+                    0 <= position.0 && position.0 < 4 && 0 <= position.1 && position.1 < 4
+                }
+                Player::Player2 => {
+                    4 <= position.0 && position.0 < 8 && 0 <= position.1 && position.1 < 4
+                }
+            }
+        }
+
         pub fn get_score(&self, player: &Player) -> &i32 {
             match player {
                 Player::Player1 => &self.scores[0],
@@ -295,7 +304,7 @@ mod model {
             }
         }
 
-        pub fn possible_actions(&self, position: &Point) -> Vec<Action> {
+        pub fn possible_actions_at(&self, position: &Point) -> Vec<Action> {
             let mut vec = Vec::<Action>::new();
 
             if let Ok((player, Some(chess))) = self.get_chess(position) {
@@ -315,9 +324,32 @@ mod model {
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
             GameState::Turn(action.player) == self.state
+                && self.is_in_zone(&action.position, &action.player)
                 && self.get_effect(&action.position, &action.movement) == Ok(action.effect)
                 && Some((action.position, action.goal()))
                     != self.previous.map(|prev| (prev.goal(), prev.position))
+        }
+
+        pub fn valid_actions(&self) -> Vec<Action> {
+            let mut res = Vec::new();
+            match self.state {
+                GameState::Turn(player) => {
+                    let rng = match player {
+                        Player::Player1 => 0..4,
+                        Player::Player2 => 4..8,
+                    };
+                    for y in rng {
+                        for x in 0..4 {
+                            res.append(&mut self.possible_actions_at(&Point(y, x)))
+                        }
+                    }
+                }
+                GameState::Win(_) => {}
+            }
+            return res
+                .into_iter()
+                .filter(|action| self.is_valid_action(action))
+                .collect();
         }
 
         pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
@@ -496,7 +528,7 @@ mod tui {
                         position: self.cursor,
                         actions: self
                             .playfield
-                            .possible_actions(&self.cursor)
+                            .possible_actions_at(&self.cursor)
                             .into_iter()
                             .filter(|action| self.playfield.is_valid_action(action))
                             .collect(),
