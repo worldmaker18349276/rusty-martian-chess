@@ -22,8 +22,8 @@ mod utils {
 }
 
 mod model {
-    use super::utils::Point;
     use super::algo::Decidable;
+    use super::utils::Point;
     use std::cmp::Ordering;
     use std::vec::Vec;
 
@@ -242,7 +242,10 @@ mod model {
             &self.state
         }
 
-        pub fn try_get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
+        pub fn try_get_chess(
+            &self,
+            position: &Point,
+        ) -> Result<(Player, Option<Chess>), OutOfBounds> {
             if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
                 Ok((
                     Player::Player1,
@@ -386,8 +389,8 @@ mod model {
     }
 
     impl Decidable for Playfield {
-        type Action = Action;
-        type Score = i32;
+        type Action = (Point, Action);
+        type Score = (i32, bool);
 
         fn valid_actions(&self) -> Vec<Self::Action> {
             let mut res = Vec::new();
@@ -405,26 +408,30 @@ mod model {
                 }
                 GameState::Win(_) => {}
             }
-            return res
-                .into_iter()
+            res.into_iter()
                 .filter(|action| self.is_valid_action(action))
-                .collect();
+                .map(|action| (action.position, action))
+                .collect()
         }
 
         fn apply_action(&self, action: &Self::Action) -> Self {
             let mut state = self.clone();
-            state.try_apply_action(action).unwrap();
+            state.try_apply_action(&action.1).unwrap();
             state
         }
 
         fn score(&self) -> Self::Score {
-            return self.scores[0] - self.scores[1];
+            return (
+                self.scores[0] - self.scores[1],
+                self.state == GameState::Win(Player::Player1),
+            );
         }
     }
 }
 
 mod tui {
     extern crate pancurses;
+    use super::algo;
     use super::model;
     use super::utils::Point;
     use pancurses::{endwin, initscr, noecho, Input};
@@ -435,40 +442,98 @@ mod tui {
             position: Point,
             actions: Vec<model::Action>,
         },
+        BotMove {
+            position: Point,
+            action: model::Action,
+        },
+        BotHalt,
+    }
+
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub enum GameMode {
+        TwoHumans,
+        HumanBot(u32),
+        BotHuman(u32),
+        TwoBots(u32, u32),
     }
 
     pub struct Board<'a> {
         playfield: &'a mut model::Playfield,
         cursor: Point,
         state: ControlState,
+        mode: GameMode,
     }
 
     impl<'a> Board<'a> {
-        pub fn init(playfield: &'a mut model::Playfield) -> Self {
-            Board {
+        pub fn init(playfield: &'a mut model::Playfield, mode: GameMode) -> Self {
+            let mut res = Board {
                 playfield,
                 cursor: Point(0, 0),
                 state: ControlState::Pick,
+                mode,
+            };
+            if let &model::GameState::Turn(_) = res.playfield.get_state() {
+                res.bot_update();
             }
+            res
+        }
+
+        fn bot_update(&mut self) {
+            match (self.playfield.get_state(), self.mode) {
+                (model::GameState::Win(_), _)
+                | (
+                    model::GameState::Turn(model::Player::Player1),
+                    GameMode::TwoHumans | GameMode::HumanBot(_),
+                )
+                | (
+                    model::GameState::Turn(model::Player::Player2),
+                    GameMode::TwoHumans | GameMode::BotHuman(_),
+                ) => {}
+                (
+                    model::GameState::Turn(model::Player::Player1),
+                    GameMode::BotHuman(level) | GameMode::TwoBots(level, _),
+                )
+                | (
+                    model::GameState::Turn(model::Player::Player2),
+                    GameMode::HumanBot(level) | GameMode::TwoBots(_, level),
+                ) => self.bot_move(level),
+            }
+        }
+
+        fn bot_move(&mut self, level: u32) {
+            let is_first =
+                self.playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
+            self.state = match algo::decide(self.playfield, level, !is_first) {
+                None => ControlState::BotHalt,
+                Some((position, action)) => ControlState::BotMove { position, action },
+            };
         }
 
         fn get_highlighted(&self) -> Vec<Point> {
             match &self.state {
-                ControlState::Pick => vec![],
+                ControlState::Pick | ControlState::BotHalt => vec![],
                 ControlState::Move {
                     position,
                     actions: _,
+                } => vec![*position],
+                ControlState::BotMove {
+                    position,
+                    action: _,
                 } => vec![*position],
             }
         }
 
         fn get_bracketed(&self) -> Vec<Point> {
             match &self.state {
-                ControlState::Pick => vec![],
+                ControlState::Pick | ControlState::BotHalt => vec![],
                 ControlState::Move {
                     position: _,
                     actions,
                 } => actions.iter().map(|action| action.goal()).collect(),
+                ControlState::BotMove {
+                    position: _,
+                    action,
+                } => vec![action.goal()],
             }
         }
     }
@@ -533,8 +598,7 @@ mod tui {
 
         fn enter(&mut self) {
             match (&self.state, self.playfield.try_get_chess(&self.cursor)) {
-                (_, Err(_)) => {}
-                (ControlState::Pick, Ok((_, None))) => {}
+                (_, Err(_)) | (ControlState::Pick, Ok((_, None))) | (ControlState::BotHalt, _) => {}
                 (ControlState::Pick, Ok((player, Some(_))))
                     if &model::GameState::Turn(player) != self.playfield.get_state() => {}
                 (ControlState::Pick, Ok((_, Some(_)))) => {
@@ -568,7 +632,20 @@ mod tui {
                     {
                         if let Ok(()) = self.playfield.try_apply_action(action) {
                             self.state = ControlState::Pick;
+                            self.bot_update();
                         }
+                    }
+                }
+                (
+                    ControlState::BotMove {
+                        position: _,
+                        action,
+                    },
+                    _,
+                ) => {
+                    if let Ok(()) = self.playfield.try_apply_action(action) {
+                        self.state = ControlState::Pick;
+                        self.bot_update();
                     }
                 }
             }
@@ -612,34 +689,68 @@ mod tui {
                     }
                 }
             }
+
+            let player1 = if let GameMode::BotHuman(_) | GameMode::TwoBots(_, _) = self.mode {
+                "  bot"
+            } else {
+                "human"
+            };
+            let player2 = if let GameMode::HumanBot(_) | GameMode::TwoBots(_, _) = self.mode {
+                "  bot"
+            } else {
+                "human"
+            };
+
+            window.mv(0, 0);
+            match self.state {
+                ControlState::Pick => {
+                    window.addstr("pick");
+                }
+                ControlState::Move {
+                    position: _,
+                    actions: _,
+                } => {
+                    window.addstr("move");
+                }
+                ControlState::BotHalt => {
+                    window.addstr("halt");
+                }
+                ControlState::BotMove {
+                    position: _,
+                    action: _,
+                } => {
+                    window.addstr("bot");
+                }
+            }
+
             window.mv(0 + offset.0, 12 + offset.1);
             match state {
                 model::GameState::Turn(model::Player::Player1) => {
-                    window.addstr(format!("<{}>", score1));
+                    window.addstr(format!("{}: <{}>", player1, score1));
                 }
                 model::GameState::Turn(model::Player::Player2) => {
-                    window.addstr(format!(" {} ", score1));
+                    window.addstr(format!("{}:  {} ", player1, score1));
                 }
                 model::GameState::Win(model::Player::Player1) => {
-                    window.addstr(format!(" {}  win", score1));
+                    window.addstr(format!("{}:  {}  win", player1, score1));
                 }
                 model::GameState::Win(model::Player::Player2) => {
-                    window.addstr(format!(" {}  loss", score1));
+                    window.addstr(format!("{}:  {}  loss", player1, score1));
                 }
             }
             window.mv(7 + offset.0, 12 + offset.1);
             match state {
                 model::GameState::Turn(model::Player::Player1) => {
-                    window.addstr(format!(" {} ", score2));
+                    window.addstr(format!("{}:  {} ", player2, score2));
                 }
                 model::GameState::Turn(model::Player::Player2) => {
-                    window.addstr(format!("<{}>", score2));
+                    window.addstr(format!("{}: <{}>", player2, score2));
                 }
                 model::GameState::Win(model::Player::Player1) => {
-                    window.addstr(format!(" {}  loss", score2));
+                    window.addstr(format!("{}:  {}  loss", player2, score2));
                 }
                 model::GameState::Win(model::Player::Player2) => {
-                    window.addstr(format!(" {}  win", score2));
+                    window.addstr(format!("{}:  {}  win", player2, score2));
                 }
             }
         }
@@ -662,7 +773,6 @@ mod tui {
 
 mod algo {
     use rand::seq::SliceRandom;
-    use std::cmp::Ordering;
 
     trait TreeLike<L>
     where
@@ -746,7 +856,7 @@ mod algo {
         T: Decidable,
         T::Score: Ord,
     {
-        fn root(state: T, depth: u32) -> Result<Vec<Self>, T::Score> {
+        fn root(state: &T, depth: u32) -> Result<Vec<Self>, T::Score> {
             let actions = state.valid_actions();
             if actions.len() == 0 {
                 return Err(state.score());
@@ -783,37 +893,54 @@ mod algo {
                         action,
                         depth: self.depth - 1,
                     })
-                    .collect::<Vec<_>>());
+                    .collect());
             }
         }
     }
 
-    pub fn decide<T>(node: T, depth: u32, maximize: bool) -> Option<T::Action>
+    pub fn decide<T>(state: &T, depth: u32, maximize: bool) -> Option<T::Action>
     where
         T: Decidable,
         T::Score: Ord,
     {
-        match DecisionTree::root(node, depth) {
+        match DecisionTree::root(state, depth) {
             Ok(subnodes) => {
                 let mut value: Option<T::Score> = None;
                 let mut decisions: Vec<T::Action> = Vec::new();
                 for subnode in subnodes {
                     let value_ = minimax(&subnode, !maximize);
-                    let is_better = if maximize {
-                        value_.cmp(&value)
+                    if maximize {
+                        match (&value, &value_) {
+                            (None, Some(_)) => {
+                                value = value_;
+                                decisions.push(subnode.action);
+                            }
+                            (Some(v1), Some(v2)) if v1 > v2 => {
+                                value = value_;
+                                decisions.clear();
+                                decisions.push(subnode.action);
+                            }
+                            (Some(v1), Some(v2)) if v1 == v2 => {
+                                decisions.push(subnode.action);
+                            }
+                            _ => {}
+                        }
                     } else {
-                        value.cmp(&value_)
-                    };
-                    match is_better {
-                        Ordering::Greater => {
-                            value = value_;
-                            decisions.clear();
-                            decisions.push(subnode.action);
+                        match (&value, &value_) {
+                            (None, Some(_)) => {
+                                value = value_;
+                                decisions.push(subnode.action);
+                            }
+                            (Some(v1), Some(v2)) if v1 < v2 => {
+                                value = value_;
+                                decisions.clear();
+                                decisions.push(subnode.action);
+                            }
+                            (Some(v1), Some(v2)) if v1 == v2 => {
+                                decisions.push(subnode.action);
+                            }
+                            _ => {}
                         }
-                        Ordering::Equal => {
-                            decisions.push(subnode.action);
-                        }
-                        Ordering::Less => {}
                     }
                 }
                 let mut rng = rand::thread_rng();
@@ -828,7 +955,7 @@ mod algo {
 fn main() {
     tui::execute_in_window(|window| {
         let mut playfield = model::Playfield::init();
-        let mut board = tui::Board::init(&mut playfield);
+        let mut board = tui::Board::init(&mut playfield, tui::GameMode::HumanBot(3));
 
         tui::control(&window, &mut board);
     })
