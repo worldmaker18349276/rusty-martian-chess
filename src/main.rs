@@ -648,7 +648,7 @@ mod algo {
     use rand::seq::SliceRandom;
     use std::cmp::Ordering;
 
-    pub trait TreeLike<L>
+    trait TreeLike<L>
     where
         Self: Sized,
     {
@@ -677,7 +677,7 @@ mod algo {
         }
     }
 
-    fn minmax<T, R>(node: &T, maximize: bool) -> Option<R>
+    fn minimax<T, R>(node: &T, maximize: bool) -> Option<R>
     where
         T: TreeLike<R>,
         R: Ord,
@@ -687,7 +687,7 @@ mod algo {
             match node.next() {
                 Ok(subnodes) => {
                     for subnode in subnodes {
-                        value = option_max(value, minmax(&subnode, !maximize));
+                        value = option_max(value, minimax(&subnode, !maximize));
                     }
                 }
                 Err(res) => value = Some(res),
@@ -698,7 +698,7 @@ mod algo {
             match node.next() {
                 Ok(subnodes) => {
                     for subnode in subnodes {
-                        value = option_min(value, minmax(&subnode, !maximize));
+                        value = option_min(value, minimax(&subnode, !maximize));
                     }
                 }
                 Err(res) => value = Some(res),
@@ -707,35 +707,105 @@ mod algo {
         }
     }
 
-    pub fn decide<T, R>(node: T) -> Option<T>
+    pub trait Decidable {
+        type Action;
+        type Score;
+        fn valid_actions(&self) -> Vec<Self::Action>;
+        fn apply_action(&self, action: &Self::Action) -> Self;
+        fn score(&self) -> Self::Score;
+    }
+
+    struct DecisionTree<T>
     where
-        T: TreeLike<R>,
-        R: Ord,
+        T: Decidable,
+        T::Score: Ord,
     {
-        let mut value: Option<R> = None;
-        let mut decisions: Vec<T> = Vec::new();
-        match node.next() {
+        state: T,
+        action: T::Action,
+        depth: u32,
+    }
+
+    impl<T> DecisionTree<T>
+    where
+        T: Decidable,
+        T::Score: Ord,
+    {
+        fn root(state: T, depth: u32) -> Result<Vec<Self>, T::Score> {
+            let actions = state.valid_actions();
+            if actions.len() == 0 {
+                return Err(state.score());
+            } else {
+                return Ok(actions
+                    .into_iter()
+                    .map(|action| DecisionTree {
+                        state: state.apply_action(&action),
+                        action,
+                        depth,
+                    })
+                    .collect());
+            }
+        }
+    }
+
+    impl<T> TreeLike<T::Score> for DecisionTree<T>
+    where
+        T: Decidable,
+        T::Score: Ord,
+    {
+        fn next(&self) -> Result<Vec<Self>, T::Score> {
+            if self.depth == 0 {
+                return Err(self.state.score());
+            }
+            let actions = self.state.valid_actions();
+            if actions.len() == 0 {
+                return Err(self.state.score());
+            } else {
+                return Ok(actions
+                    .into_iter()
+                    .map(|action| DecisionTree {
+                        state: self.state.apply_action(&action),
+                        action,
+                        depth: self.depth - 1,
+                    })
+                    .collect::<Vec<_>>());
+            }
+        }
+    }
+
+    pub fn decide<T>(node: T, depth: u32, maximize: bool) -> Option<T::Action>
+    where
+        T: Decidable,
+        T::Score: Ord,
+    {
+        match DecisionTree::root(node, depth) {
             Ok(subnodes) => {
+                let mut value: Option<T::Score> = None;
+                let mut decisions: Vec<T::Action> = Vec::new();
                 for subnode in subnodes {
-                    let value_ = minmax(&subnode, false);
-                    match value_.cmp(&value) {
+                    let value_ = minimax(&subnode, !maximize);
+                    let is_better = if maximize {
+                        value_.cmp(&value)
+                    } else {
+                        value.cmp(&value_)
+                    };
+                    match is_better {
                         Ordering::Greater => {
                             value = value_;
                             decisions.clear();
-                            decisions.push(subnode);
+                            decisions.push(subnode.action);
                         }
                         Ordering::Equal => {
-                            decisions.push(subnode);
+                            decisions.push(subnode.action);
                         }
                         Ordering::Less => {}
                     }
                 }
+                let mut rng = rand::thread_rng();
+                decisions.shuffle(&mut rng);
+                decisions.pop()
             }
-            Err(_) => {}
-        };
-        let mut rng = rand::thread_rng();
-        decisions.shuffle(&mut rng);
-        decisions.pop()
+            Err(_) => None,
+        }
     }
 }
 
