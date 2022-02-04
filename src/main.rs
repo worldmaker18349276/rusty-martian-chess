@@ -644,6 +644,128 @@ mod tui {
     }
 }
 
+mod algo {
+    pub trait TreeLike<L>
+    where
+        Self: Sized,
+    {
+        fn next(&self) -> Result<Vec<Self>, L>;
+    }
+
+    fn option_max<T>(a: Option<T>, b: Option<T>) -> Option<T>
+    where
+        T: Ord
+    {
+        match (a, b) {
+            (None, None) => None,
+            (Some(v), None) | (None, Some(v)) => Some(v),
+            (Some(v1), Some(v2)) => Some(v1.max(v2)),
+        }
+    }
+
+    fn option_min<T>(a: Option<T>, b: Option<T>) -> Option<T>
+    where
+        T: Ord
+    {
+        match (a, b) {
+            (None, None) => None,
+            (Some(v), None) | (None, Some(v)) => Some(v),
+            (Some(v1), Some(v2)) => Some(v1.min(v2)),
+        }
+    }
+
+    fn minmax<T, R>(node: T, maximize: bool) -> Option<R>
+    where
+        T: TreeLike<R>,
+        R: Ord,
+    {
+        if maximize {
+            let mut value: Option<R> = None;
+            match node.next() {
+                Ok(subnodes) => {
+                    for subnode in subnodes {
+                        value = option_max(value, minmax(subnode, !maximize));
+                    }
+                },
+                Err(res) => value = Some(res),
+            };
+            value
+        } else {
+            let mut value: Option<R> = None;
+            match node.next() {
+                Ok(subnodes) => {
+                    for subnode in subnodes {
+                        value = option_min(value, minmax(subnode, !maximize));
+                    }
+                },
+                Err(res) => value = Some(res),
+            };
+            value
+        }
+    }
+}
+
+mod algo {
+    pub trait TreeLike<L>
+    where
+        Self: Sized,
+    {
+        fn next(&self) -> Result<Vec<Self>, L>;
+    }
+
+    fn option_max<T>(a: Option<T>, b: Option<T>) -> Option<T>
+    where
+        T: Ord
+    {
+        match (a, b) {
+            (None, None) => None,
+            (Some(v), None) | (None, Some(v)) => Some(v),
+            (Some(v1), Some(v2)) => Some(v1.max(v2)),
+        }
+    }
+
+    fn option_min<T>(a: Option<T>, b: Option<T>) -> Option<T>
+    where
+        T: Ord
+    {
+        match (a, b) {
+            (None, None) => None,
+            (Some(v), None) | (None, Some(v)) => Some(v),
+            (Some(v1), Some(v2)) => Some(v1.min(v2)),
+        }
+    }
+
+    fn minmax<T, R>(node: T, maximize: bool) -> Option<R>
+    where
+        T: TreeLike<R>,
+        R: Ord,
+    {
+        if maximize {
+            let mut value: Option<R> = None;
+            match node.next() {
+                Ok(subnodes) => {
+                    for subnode in subnodes {
+                        value = option_max(value, minmax(subnode, !maximize));
+                    }
+                },
+                Err(res) => value = Some(res),
+            };
+            value
+        } else {
+            let mut value: Option<R> = None;
+            match node.next() {
+                Ok(subnodes) => {
+                    for subnode in subnodes {
+                        value = option_min(value, minmax(subnode, !maximize));
+                    }
+                },
+                Err(res) => value = Some(res),
+            };
+            value
+        }
+    }
+}
+
 fn main() {
     tui::execute_in_window(|window| {
         let mut playfield = model::Playfield::init();
