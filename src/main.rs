@@ -354,15 +354,11 @@ mod model {
 
         pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
             match self.state {
-                GameState::Win(_) => Err(InvalidAction),
-                GameState::Turn(player) => {
-                    if !self.is_valid_action(action) {
-                        return Err(InvalidAction);
-                    }
+                GameState::Turn(player) if self.is_valid_action(action) => {
                     let start = action.position;
-                    let (chess, dir, cross) = action.movement.value();
+                    let goal = action.goal();
+                    let chess = action.movement.value().0;
                     // assert_eq!(self.board[start.0 as usize][start.1 as usize], chess);
-                    let goal = start + dir * ((cross + 1) as i32);
                     match action.effect {
                         Effect::Move => {
                             self.board[start.0 as usize][start.1 as usize] = None;
@@ -383,17 +379,18 @@ mod model {
                     }
                     self.previous = Some(*action);
 
-                    let is_end = self
+                    let is_empty1 = self
                         .get_zone(&Player::Player1)
                         .iter()
                         .flatten()
-                        .all(Option::is_none)
-                        || self
-                            .get_zone(&Player::Player2)
-                            .iter()
-                            .flatten()
-                            .all(Option::is_none);
-                    self.state = match (is_end, self.scores[0].cmp(&self.scores[1])) {
+                        .all(Option::is_none);
+                    let is_empty2 = self
+                        .get_zone(&Player::Player2)
+                        .iter()
+                        .flatten()
+                        .all(Option::is_none);
+                    self.state = match (is_empty1 || is_empty2, self.scores[0].cmp(&self.scores[1]))
+                    {
                         (true, Ordering::Greater) => GameState::Win(Player::Player1),
                         (true, Ordering::Less) => GameState::Win(Player::Player2),
                         (true, Ordering::Equal) => GameState::Win(player),
@@ -404,6 +401,7 @@ mod model {
                     };
                     Ok(())
                 }
+                _ => Err(InvalidAction),
             }
         }
     }
