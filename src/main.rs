@@ -164,10 +164,14 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub struct OutOfBounds(Point);
+    pub struct OutOfBounds;
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub struct InvalidAction(Action);
+    pub struct InvalidAction;
+
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub struct InvalidMovement;
+
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum GameState {
         Turn(Player),
@@ -240,32 +244,33 @@ mod model {
                     self.board[position.0 as usize][position.1 as usize],
                 ))
             } else {
-                Err(OutOfBounds(*position))
+                Err(OutOfBounds)
             }
         }
 
-        pub fn get_effect(&self, position: &Point, movement: &Movement) -> Option<Effect> {
+        pub fn get_effect(
+            &self,
+            position: &Point,
+            movement: &Movement,
+        ) -> Result<Effect, InvalidMovement> {
             let (chess, dir, cross) = movement.value();
             match self.get_chess(position) {
-                Ok((player, Some(chess_))) => {
-                    if chess_ != chess {
-                        return None;
-                    }
+                Ok((player, Some(chess_))) if chess_ == chess => {
                     let mut goal = *position;
                     for _ in 0..cross {
                         goal = goal + dir;
                         match self.get_chess(&goal) {
                             Ok((_, None)) => continue,
-                            _ => return None,
+                            _ => return Err(InvalidMovement),
                         }
                     }
                     goal = goal + dir;
                     match self.get_chess(&goal) {
-                        Err(_) => None,
-                        Ok((_, None)) => Some(Effect::Move),
+                        Err(_) => Err(InvalidMovement),
+                        Ok((_, None)) => Ok(Effect::Move),
                         Ok((owner, Some(captured))) => {
                             if owner != player {
-                                return Some(Effect::Capture(captured.point()));
+                                return Ok(Effect::Capture(captured.point()));
                             } else {
                                 let promoted = if chess == Chess::Pawn && captured == Chess::Pawn {
                                     Chess::Drone
@@ -274,19 +279,19 @@ mod model {
                                 } else if chess == Chess::Drone && captured == Chess::Pawn {
                                     Chess::Queen
                                 } else {
-                                    return None;
+                                    return Err(InvalidMovement);
                                 };
                                 let zone = self.get_zone(&player);
                                 if zone.iter().flatten().all(|grid| grid != &Some(promoted)) {
-                                    return Some(Effect::Promotion(promoted));
+                                    return Ok(Effect::Promotion(promoted));
                                 } else {
-                                    return None;
+                                    return Err(InvalidMovement);
                                 }
                             }
                         }
                     }
                 }
-                _ => return None,
+                _ => return Err(InvalidMovement),
             }
         }
 
@@ -295,7 +300,7 @@ mod model {
 
             if let Ok((player, Some(chess))) = self.get_chess(position) {
                 for movement in Movement::possible_movements_of(&chess) {
-                    if let Some(effect) = self.get_effect(position, &movement) {
+                    if let Ok(effect) = self.get_effect(position, &movement) {
                         vec.push(Action {
                             player,
                             position: *position,
@@ -310,17 +315,17 @@ mod model {
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
             GameState::Turn(action.player) == self.state
-                && self.get_effect(&action.position, &action.movement) == Some(action.effect)
+                && self.get_effect(&action.position, &action.movement) == Ok(action.effect)
                 && Some((action.position, action.goal()))
                     != self.previous.map(|prev| (prev.goal(), prev.position))
         }
 
         pub fn apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
             match self.state {
-                GameState::Win(_) => Err(InvalidAction(*action)),
+                GameState::Win(_) => Err(InvalidAction),
                 GameState::Turn(player) => {
                     if !self.is_valid_action(action) {
-                        return Err(InvalidAction(*action));
+                        return Err(InvalidAction);
                     }
                     let start = action.position;
                     let (chess, dir, cross) = action.movement.value();
