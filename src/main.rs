@@ -645,6 +645,9 @@ mod tui {
 }
 
 mod algo {
+    use rand::seq::SliceRandom;
+    use std::cmp::Ordering;
+
     pub trait TreeLike<L>
     where
         Self: Sized,
@@ -654,7 +657,7 @@ mod algo {
 
     fn option_max<T>(a: Option<T>, b: Option<T>) -> Option<T>
     where
-        T: Ord
+        T: Ord,
     {
         match (a, b) {
             (None, None) => None,
@@ -665,7 +668,7 @@ mod algo {
 
     fn option_min<T>(a: Option<T>, b: Option<T>) -> Option<T>
     where
-        T: Ord
+        T: Ord,
     {
         match (a, b) {
             (None, None) => None,
@@ -674,7 +677,7 @@ mod algo {
         }
     }
 
-    fn minmax<T, R>(node: T, maximize: bool) -> Option<R>
+    fn minmax<T, R>(node: &T, maximize: bool) -> Option<R>
     where
         T: TreeLike<R>,
         R: Ord,
@@ -684,9 +687,9 @@ mod algo {
             match node.next() {
                 Ok(subnodes) => {
                     for subnode in subnodes {
-                        value = option_max(value, minmax(subnode, !maximize));
+                        value = option_max(value, minmax(&subnode, !maximize));
                     }
-                },
+                }
                 Err(res) => value = Some(res),
             };
             value
@@ -695,74 +698,44 @@ mod algo {
             match node.next() {
                 Ok(subnodes) => {
                     for subnode in subnodes {
-                        value = option_min(value, minmax(subnode, !maximize));
+                        value = option_min(value, minmax(&subnode, !maximize));
                     }
-                },
+                }
                 Err(res) => value = Some(res),
             };
             value
         }
     }
-}
 
-mod algo {
-    pub trait TreeLike<L>
-    where
-        Self: Sized,
-    {
-        fn next(&self) -> Result<Vec<Self>, L>;
-    }
-
-    fn option_max<T>(a: Option<T>, b: Option<T>) -> Option<T>
-    where
-        T: Ord
-    {
-        match (a, b) {
-            (None, None) => None,
-            (Some(v), None) | (None, Some(v)) => Some(v),
-            (Some(v1), Some(v2)) => Some(v1.max(v2)),
-        }
-    }
-
-    fn option_min<T>(a: Option<T>, b: Option<T>) -> Option<T>
-    where
-        T: Ord
-    {
-        match (a, b) {
-            (None, None) => None,
-            (Some(v), None) | (None, Some(v)) => Some(v),
-            (Some(v1), Some(v2)) => Some(v1.min(v2)),
-        }
-    }
-
-    fn minmax<T, R>(node: T, maximize: bool) -> Option<R>
+    pub fn decide<T, R>(node: T) -> Option<T>
     where
         T: TreeLike<R>,
         R: Ord,
     {
-        if maximize {
-            let mut value: Option<R> = None;
-            match node.next() {
-                Ok(subnodes) => {
-                    for subnode in subnodes {
-                        value = option_max(value, minmax(subnode, !maximize));
+        let mut value: Option<R> = None;
+        let mut decisions: Vec<T> = Vec::new();
+        match node.next() {
+            Ok(subnodes) => {
+                for subnode in subnodes {
+                    let value_ = minmax(&subnode, false);
+                    match value_.cmp(&value) {
+                        Ordering::Greater => {
+                            value = value_;
+                            decisions.clear();
+                            decisions.push(subnode);
+                        }
+                        Ordering::Equal => {
+                            decisions.push(subnode);
+                        }
+                        Ordering::Less => {}
                     }
-                },
-                Err(res) => value = Some(res),
-            };
-            value
-        } else {
-            let mut value: Option<R> = None;
-            match node.next() {
-                Ok(subnodes) => {
-                    for subnode in subnodes {
-                        value = option_min(value, minmax(subnode, !maximize));
-                    }
-                },
-                Err(res) => value = Some(res),
-            };
-            value
-        }
+                }
+            }
+            Err(_) => {}
+        };
+        let mut rng = rand::thread_rng();
+        decisions.shuffle(&mut rng);
+        decisions.pop()
     }
 }
 
