@@ -783,59 +783,68 @@ mod tui {
 
 mod algo {
     use rand::seq::SliceRandom;
+    use std::cmp::Ordering;
 
     trait TreeLike<L>: Sized {
         fn next(&self) -> Result<Vec<Self>, L>;
     }
 
-    fn option_max<T>(a: Option<T>, b: Option<T>) -> Option<T>
-    where
-        T: Ord,
-    {
-        match (a, b) {
-            (None, None) => None,
-            (Some(v), None) | (None, Some(v)) => Some(v),
-            (Some(v1), Some(v2)) => Some(v1.max(v2)),
-        }
+    #[derive(Copy, Clone, Ord, Eq, PartialOrd, PartialEq)]
+    enum ExtendedOrd<R> {
+        Smallest,
+        Normal(R),
+        Largest,
     }
 
-    fn option_min<T>(a: Option<T>, b: Option<T>) -> Option<T>
-    where
-        T: Ord,
-    {
-        match (a, b) {
-            (None, None) => None,
-            (Some(v), None) | (None, Some(v)) => Some(v),
-            (Some(v1), Some(v2)) => Some(v1.min(v2)),
-        }
-    }
-
-    fn minimax<T, R>(node: &T, maximize: bool) -> Option<R>
+    fn minimax<T, R>(
+        node: &T,
+        maximize: bool,
+        mut alpha: ExtendedOrd<R>,
+        mut beta: ExtendedOrd<R>,
+    ) -> ExtendedOrd<R>
     where
         T: TreeLike<R>,
-        R: Ord,
+        R: Ord + Copy,
     {
         if maximize {
             match node.next() {
                 Ok(subnodes) => {
-                    let mut value: Option<R> = None;
+                    let mut value = ExtendedOrd::Smallest;
                     for subnode in subnodes {
-                        value = option_max(value, minimax(&subnode, !maximize));
+                        if value > beta {
+                            return ExtendedOrd::Largest;
+                        }
+                        if value > alpha {
+                            alpha = value;
+                        }
+                        let subvalue = minimax(&subnode, !maximize, alpha, beta);
+                        if subvalue > value {
+                            value = subvalue;
+                        }
                     }
                     value
                 }
-                Err(res) => Some(res),
+                Err(res) => ExtendedOrd::Normal(res),
             }
         } else {
             match node.next() {
                 Ok(subnodes) => {
-                    let mut value: Option<R> = None;
+                    let mut value = ExtendedOrd::Largest;
                     for subnode in subnodes {
-                        value = option_min(value, minimax(&subnode, !maximize));
+                        if value < alpha {
+                            return ExtendedOrd::Smallest;
+                        }
+                        if value < beta {
+                            beta = value;
+                        }
+                        let subvalue = minimax(&subnode, !maximize, alpha, beta);
+                        if subvalue < value {
+                            value = subvalue;
+                        }
                     }
                     value
                 }
-                Err(res) => Some(res),
+                Err(res) => ExtendedOrd::Normal(res),
             }
         }
     }
@@ -904,45 +913,46 @@ mod algo {
     pub fn decide<T>(state: &T, depth: u32, maximize: bool) -> Option<T::Action>
     where
         T: Decidable,
-        T::Score: Ord,
+        T::Score: Ord + Copy,
     {
-        let mut value: Option<T::Score> = None;
+        let mut value;
         let mut decisions: Vec<T::Action> = Vec::new();
-        for subnode in DecisionTree::root(state, depth) {
-            let value_ = minimax(&subnode, !maximize);
-            if maximize {
-                match (&value, &value_) {
-                    (None, Some(_)) => {
-                        value = value_;
-                        decisions.push(subnode.action);
-                    }
-                    (Some(v1), Some(v2)) if v1 < v2 => {
+        let subnodes = DecisionTree::root(state, depth);
+        if maximize {
+            value = ExtendedOrd::Smallest;
+            for subnode in subnodes {
+                let value_ = minimax(&subnode, !maximize, value, ExtendedOrd::Largest);
+                match value_.cmp(&value) {
+                    Ordering::Greater => {
                         value = value_;
                         decisions.clear();
                         decisions.push(subnode.action);
                     }
-                    (Some(v1), Some(v2)) if v1 == v2 => {
+                    Ordering::Equal => {
                         decisions.push(subnode.action);
                     }
-                    _ => {}
-                }
-            } else {
-                match (&value, &value_) {
-                    (None, Some(_)) => {
-                        value = value_;
-                        decisions.push(subnode.action);
-                    }
-                    (Some(v1), Some(v2)) if v1 > v2 => {
-                        value = value_;
-                        decisions.clear();
-                        decisions.push(subnode.action);
-                    }
-                    (Some(v1), Some(v2)) if v1 == v2 => {
-                        decisions.push(subnode.action);
-                    }
-                    _ => {}
+                    Ordering::Less => {}
                 }
             }
+        } else {
+            value = ExtendedOrd::Largest;
+            for subnode in subnodes {
+                let value_ = minimax(&subnode, !maximize, ExtendedOrd::Smallest, value);
+                match value_.cmp(&value) {
+                    Ordering::Less => {
+                        value = value_;
+                        decisions.clear();
+                        decisions.push(subnode.action);
+                    }
+                    Ordering::Equal => {
+                        decisions.push(subnode.action);
+                    }
+                    Ordering::Greater => {}
+                }
+            }
+        }
+        if let ExtendedOrd::Smallest | ExtendedOrd::Largest = value {
+            return None;
         }
         let mut rng = rand::thread_rng();
         decisions.shuffle(&mut rng);
@@ -972,7 +982,7 @@ fn main() {
                 } else if buf == "3\n" {
                     tui::GameMode::BotHuman(3)
                 } else if buf == "4\n" {
-                    tui::GameMode::TwoBots(3, 3)
+                    tui::GameMode::TwoBots(4, 3)
                 } else {
                     return;
                 };
