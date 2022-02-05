@@ -220,17 +220,6 @@ mod model {
             }
         }
 
-        pub fn is_in_zone(&self, position: &Point, player: &Player) -> bool {
-            match player {
-                Player::Player1 => {
-                    0 <= position.0 && position.0 < 4 && 0 <= position.1 && position.1 < 4
-                }
-                Player::Player2 => {
-                    4 <= position.0 && position.0 < 8 && 0 <= position.1 && position.1 < 4
-                }
-            }
-        }
-
         pub fn get_score(&self, player: &Player) -> &i32 {
             match player {
                 Player::Player1 => &self.scores[0],
@@ -261,6 +250,27 @@ mod model {
             }
         }
 
+        pub fn is_in_zone(&self, position: &Point, player: &Player) -> bool {
+            // if let Ok((ref player_, _)) = self.try_get_chess(position) { player_ == player } else { false }
+            match player {
+                Player::Player1 => {
+                    0 <= position.0 && position.0 < 4 && 0 <= position.1 && position.1 < 4
+                }
+                Player::Player2 => {
+                    4 <= position.0 && position.0 < 8 && 0 <= position.1 && position.1 < 4
+                }
+            }
+        }
+
+        pub fn is_empty_at(&self, position: &Point) -> bool {
+            // if let Ok((_, None)) = self.try_get_chess(position) { player_ == player } else { false }
+            if position.0 >= 0 && position.0 < 8 && position.1 >= 0 && position.1 < 4 {
+                self.board[position.0 as usize][position.1 as usize] == None
+            } else {
+                false
+            }
+        }
+
         pub fn try_get_effect(
             &self,
             position: &Point,
@@ -272,9 +282,10 @@ mod model {
                     let mut goal = *position;
                     for _ in 0..cross {
                         goal = goal + dir;
-                        match self.try_get_chess(&goal) {
-                            Ok((_, None)) => continue,
-                            _ => return Err(InvalidMovement),
+                        if self.is_empty_at(&goal) {
+                            continue;
+                        } else {
+                            return Err(InvalidMovement);
                         }
                     }
                     goal = goal + dir;
@@ -327,64 +338,64 @@ mod model {
         }
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
-            GameState::Turn(action.player) == self.state
+            self.unsafe_is_valid_action(action)
                 && self.is_in_zone(&action.position, &action.player)
                 && self.try_get_effect(&action.position, &action.movement) == Ok(action.effect)
+        }
+
+        fn unsafe_is_valid_action(&self, action: &Action) -> bool {
+            GameState::Turn(action.player) == self.state
                 && Some((action.position, action.goal()))
                     != self.previous.map(|prev| (prev.goal(), prev.position))
         }
 
         pub fn try_apply_action(&mut self, action: &Action) -> Result<(), InvalidAction> {
-            match self.state {
-                GameState::Turn(player) if self.is_valid_action(action) => {
-                    let start = action.position;
-                    let goal = action.goal();
-                    let chess = action.movement.value().0;
-                    // assert_eq!(self.board[start.0 as usize][start.1 as usize], chess);
-                    match action.effect {
-                        Effect::Move => {
-                            self.board[start.0 as usize][start.1 as usize] = None;
-                            self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
-                        }
-                        Effect::Capture(point) => {
-                            self.board[start.0 as usize][start.1 as usize] = None;
-                            self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
-                            match player {
-                                Player::Player1 => self.scores[0] += point,
-                                Player::Player2 => self.scores[1] += point,
-                            }
-                        }
-                        Effect::Promotion(promoted) => {
-                            self.board[start.0 as usize][start.1 as usize] = None;
-                            self.board[goal.0 as usize][goal.1 as usize] = Some(promoted);
-                        }
-                    }
-                    self.previous = Some(*action);
-
-                    let is_empty1 = self
-                        .get_zone(&Player::Player1)
-                        .iter()
-                        .flatten()
-                        .all(Option::is_none);
-                    let is_empty2 = self
-                        .get_zone(&Player::Player2)
-                        .iter()
-                        .flatten()
-                        .all(Option::is_none);
-                    self.state = match (is_empty1 || is_empty2, self.scores[0].cmp(&self.scores[1]))
-                    {
-                        (true, Ordering::Greater) => GameState::Win(Player::Player1),
-                        (true, Ordering::Less) => GameState::Win(Player::Player2),
-                        (true, Ordering::Equal) => GameState::Win(player),
-                        (false, _) => match player {
-                            Player::Player1 => GameState::Turn(Player::Player2),
-                            Player::Player2 => GameState::Turn(Player::Player1),
-                        },
-                    };
-                    Ok(())
-                }
-                _ => Err(InvalidAction),
+            if self.is_valid_action(action) {
+                self.unsafe_apply_action(action);
+                Ok(())
+            } else {
+                Err(InvalidAction)
             }
+        }
+
+        fn unsafe_apply_action(&mut self, action: &Action) {
+            let start = action.position;
+            let goal = action.goal();
+            let chess = action.movement.value().0;
+            match action.effect {
+                Effect::Move => {
+                    self.board[start.0 as usize][start.1 as usize] = None;
+                    self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
+                }
+                Effect::Capture(point) => {
+                    self.board[start.0 as usize][start.1 as usize] = None;
+                    self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
+                    match action.player {
+                        Player::Player1 => self.scores[0] += point,
+                        Player::Player2 => self.scores[1] += point,
+                    }
+                }
+                Effect::Promotion(promoted) => {
+                    self.board[start.0 as usize][start.1 as usize] = None;
+                    self.board[goal.0 as usize][goal.1 as usize] = Some(promoted);
+                }
+            }
+            self.previous = Some(*action);
+
+            let is_empty = self
+                .get_zone(&action.player)
+                .iter()
+                .flatten()
+                .all(Option::is_none);
+            self.state = match (is_empty, self.scores[0].cmp(&self.scores[1])) {
+                (true, Ordering::Greater) => GameState::Win(Player::Player1),
+                (true, Ordering::Less) => GameState::Win(Player::Player2),
+                (true, Ordering::Equal) => GameState::Win(action.player),
+                (false, _) => match action.player {
+                    Player::Player1 => GameState::Turn(Player::Player2),
+                    Player::Player2 => GameState::Turn(Player::Player1),
+                },
+            };
         }
     }
 
@@ -396,11 +407,11 @@ mod model {
             let mut res = Vec::new();
             match self.state {
                 GameState::Turn(player) => {
-                    let rng = match player {
+                    let range = match player {
                         Player::Player1 => 0..4,
                         Player::Player2 => 4..8,
                     };
-                    for y in rng {
+                    for y in range {
                         for x in 0..4 {
                             res.append(&mut self.possible_actions_at(&Point(y, x)))
                         }
@@ -409,14 +420,14 @@ mod model {
                 GameState::Win(_) => {}
             }
             res.into_iter()
-                .filter(|action| self.is_valid_action(action))
+                .filter(|action| self.unsafe_is_valid_action(action))
                 .map(|action| (action.position, action))
                 .collect()
         }
 
         fn apply_action(&self, action: &Self::Action) -> Self {
             let mut state = self.clone();
-            state.try_apply_action(&action.1).unwrap();
+            state.unsafe_apply_action(&action.1);
             state
         }
 
@@ -434,7 +445,7 @@ mod tui {
     use super::algo;
     use super::model;
     use super::utils::Point;
-    use pancurses::{endwin, initscr, noecho, Input};
+    use pancurses::{endwin, initscr, noecho, Input, Window};
 
     enum ControlState {
         Pick,
@@ -503,7 +514,7 @@ mod tui {
         fn bot_move(&mut self, level: u32) {
             let is_first =
                 self.playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
-            self.state = match algo::decide(self.playfield, level, !is_first) {
+            self.state = match algo::decide(self.playfield, level, is_first) {
                 None => ControlState::BotHalt,
                 Some((position, action)) => ControlState::BotMove { position, action },
             };
@@ -544,14 +555,13 @@ mod tui {
         fn left(&mut self);
         fn right(&mut self);
         fn enter(&mut self);
-        fn render(&mut self, window: &pancurses::Window);
+        fn render(&mut self, window: &Window);
     }
 
-    pub fn control<T>(window: &pancurses::Window, controller: &mut T)
+    pub fn control<T>(window: &Window, controller: &mut T)
     where
         T: Control,
     {
-        window.printw("Type things, press 'q' to quit\n");
         window.refresh();
         window.keypad(true);
         noecho();
@@ -651,7 +661,7 @@ mod tui {
             }
         }
 
-        fn render(&mut self, window: &pancurses::Window) {
+        fn render(&mut self, window: &Window) {
             let offset: &'a _ = &(2, 2);
 
             window.clear();
@@ -758,7 +768,7 @@ mod tui {
 
     pub fn execute_in_window<T>(func: T)
     where
-        T: FnOnce(&pancurses::Window),
+        T: FnOnce(&Window),
     {
         let window = initscr();
         window.refresh();
@@ -774,10 +784,7 @@ mod tui {
 mod algo {
     use rand::seq::SliceRandom;
 
-    trait TreeLike<L>
-    where
-        Self: Sized,
-    {
+    trait TreeLike<L>: Sized {
         fn next(&self) -> Result<Vec<Self>, L>;
     }
 
@@ -809,27 +816,27 @@ mod algo {
         R: Ord,
     {
         if maximize {
-            let mut value: Option<R> = None;
             match node.next() {
                 Ok(subnodes) => {
+                    let mut value: Option<R> = None;
                     for subnode in subnodes {
                         value = option_max(value, minimax(&subnode, !maximize));
                     }
+                    value
                 }
-                Err(res) => value = Some(res),
-            };
-            value
+                Err(res) => Some(res),
+            }
         } else {
-            let mut value: Option<R> = None;
             match node.next() {
                 Ok(subnodes) => {
+                    let mut value: Option<R> = None;
                     for subnode in subnodes {
                         value = option_min(value, minimax(&subnode, !maximize));
                     }
+                    value
                 }
-                Err(res) => value = Some(res),
-            };
-            value
+                Err(res) => Some(res),
+            }
         }
     }
 
@@ -856,20 +863,16 @@ mod algo {
         T: Decidable,
         T::Score: Ord,
     {
-        fn root(state: &T, depth: u32) -> Result<Vec<Self>, T::Score> {
+        fn root(state: &T, depth: u32) -> Vec<Self> {
             let actions = state.valid_actions();
-            if actions.len() == 0 {
-                return Err(state.score());
-            } else {
-                return Ok(actions
-                    .into_iter()
-                    .map(|action| DecisionTree {
-                        state: state.apply_action(&action),
-                        action,
-                        depth,
-                    })
-                    .collect());
-            }
+            return actions
+                .into_iter()
+                .map(|action| DecisionTree {
+                    state: state.apply_action(&action),
+                    action,
+                    depth,
+                })
+                .collect();
         }
     }
 
@@ -903,52 +906,47 @@ mod algo {
         T: Decidable,
         T::Score: Ord,
     {
-        match DecisionTree::root(state, depth) {
-            Ok(subnodes) => {
-                let mut value: Option<T::Score> = None;
-                let mut decisions: Vec<T::Action> = Vec::new();
-                for subnode in subnodes {
-                    let value_ = minimax(&subnode, !maximize);
-                    if maximize {
-                        match (&value, &value_) {
-                            (None, Some(_)) => {
-                                value = value_;
-                                decisions.push(subnode.action);
-                            }
-                            (Some(v1), Some(v2)) if v1 > v2 => {
-                                value = value_;
-                                decisions.clear();
-                                decisions.push(subnode.action);
-                            }
-                            (Some(v1), Some(v2)) if v1 == v2 => {
-                                decisions.push(subnode.action);
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        match (&value, &value_) {
-                            (None, Some(_)) => {
-                                value = value_;
-                                decisions.push(subnode.action);
-                            }
-                            (Some(v1), Some(v2)) if v1 < v2 => {
-                                value = value_;
-                                decisions.clear();
-                                decisions.push(subnode.action);
-                            }
-                            (Some(v1), Some(v2)) if v1 == v2 => {
-                                decisions.push(subnode.action);
-                            }
-                            _ => {}
-                        }
+        let mut value: Option<T::Score> = None;
+        let mut decisions: Vec<T::Action> = Vec::new();
+        for subnode in DecisionTree::root(state, depth) {
+            let value_ = minimax(&subnode, !maximize);
+            if maximize {
+                match (&value, &value_) {
+                    (None, Some(_)) => {
+                        value = value_;
+                        decisions.push(subnode.action);
                     }
+                    (Some(v1), Some(v2)) if v1 < v2 => {
+                        value = value_;
+                        decisions.clear();
+                        decisions.push(subnode.action);
+                    }
+                    (Some(v1), Some(v2)) if v1 == v2 => {
+                        decisions.push(subnode.action);
+                    }
+                    _ => {}
                 }
-                let mut rng = rand::thread_rng();
-                decisions.shuffle(&mut rng);
-                decisions.pop()
+            } else {
+                match (&value, &value_) {
+                    (None, Some(_)) => {
+                        value = value_;
+                        decisions.push(subnode.action);
+                    }
+                    (Some(v1), Some(v2)) if v1 > v2 => {
+                        value = value_;
+                        decisions.clear();
+                        decisions.push(subnode.action);
+                    }
+                    (Some(v1), Some(v2)) if v1 == v2 => {
+                        decisions.push(subnode.action);
+                    }
+                    _ => {}
+                }
             }
-            Err(_) => None,
         }
+        let mut rng = rand::thread_rng();
+        decisions.shuffle(&mut rng);
+        decisions.pop()
     }
 }
 
@@ -982,7 +980,7 @@ fn main() {
             _ => {
                 println!("please input number 0~4");
                 buf.clear();
-            },
+            }
         }
     };
 
