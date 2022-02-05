@@ -952,10 +952,43 @@ mod algo {
     }
 }
 
+use std::io::Write;
+
 fn main() {
+    let mut buf = String::new();
+    println!("please select game mode");
+    println!("1. two humans");
+    println!("2. human v.s. bot");
+    println!("3. bot v.s. human");
+    println!("4. bot v.s. bot");
+    println!("0. quit");
+    let mode = loop {
+        print!(":");
+        std::io::stdout().flush().expect("Could not flush stdout");
+        match (std::io::stdin().read_line(&mut buf), buf.as_str()) {
+            (Ok(_), "0\n" | "1\n" | "2\n" | "3\n" | "4\n") => {
+                break if buf == "1\n" {
+                    tui::GameMode::TwoHumans
+                } else if buf == "2\n" {
+                    tui::GameMode::HumanBot(3)
+                } else if buf == "3\n" {
+                    tui::GameMode::BotHuman(3)
+                } else if buf == "4\n" {
+                    tui::GameMode::TwoBots(3, 3)
+                } else {
+                    return;
+                };
+            }
+            _ => {
+                println!("please input number 0~4");
+                buf.clear();
+            },
+        }
+    };
+
     tui::execute_in_window(|window| {
         let mut playfield = model::Playfield::init();
-        let mut board = tui::Board::init(&mut playfield, tui::GameMode::HumanBot(3));
+        let mut board = tui::Board::init(&mut playfield, mode);
 
         tui::control(&window, &mut board);
     })
