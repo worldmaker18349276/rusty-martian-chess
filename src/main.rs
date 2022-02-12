@@ -926,7 +926,7 @@ mod algo {
         }
     }
 
-    pub fn decide<T>(state: &T, depth: u32, maximize: bool) -> Option<T::Action>
+    pub fn decide_multilpe<T>(state: &T, depth: u32, maximize: bool) -> Vec<T::Action>
     where
         T: Decidable,
         T::Score: Ord + Copy,
@@ -969,15 +969,24 @@ mod algo {
                 }
             }
         }
-        if let ExtendedOrd::Smallest | ExtendedOrd::Largest = value {
-            return None;
+        match value {
+            ExtendedOrd::Smallest | ExtendedOrd::Largest => vec![],
+            ExtendedOrd::Normal(_) => decisions,
         }
+    }
+
+    pub fn decide<T>(state: &T, depth: u32, maximize: bool) -> Option<T::Action>
+    where
+        T: Decidable,
+        T::Score: Ord + Copy,
+    {
+        let mut decisions = decide_multilpe(state, depth, maximize);
         let len = decisions.len();
         if len == 0 {
             None
         } else {
-            let mut rng = rand::thread_rng();
-            let n = (rng.gen::<f64>() * len as f64) as usize;
+            let n = rand::thread_rng().gen::<f64>();
+            let n = (n * len as f64) as usize;
             Some(decisions.remove(n))
         }
     }
