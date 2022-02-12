@@ -220,6 +220,18 @@ mod model {
             }
         }
 
+        pub fn get_board_positions(&self) -> impl Iterator<Item=Point> {
+            (0..8).into_iter().flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
+        }
+
+        pub fn get_zone_positions(&self, player: &Player) -> impl Iterator<Item=Point> {
+            let range = match player {
+                Player::Player1 => (0..4),
+                Player::Player2 => (4..8),
+            };
+            range.into_iter().flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
+        }
+
         pub fn get_score(&self, player: &Player) -> &i32 {
             match player {
                 Player::Player1 => &self.scores[0],
@@ -294,28 +306,28 @@ mod model {
                         Ok((_, None)) => Ok(Effect::Move),
                         Ok((owner, Some(captured))) => {
                             if owner != player {
-                                return Ok(Effect::Capture(captured.point()));
+                                Ok(Effect::Capture(captured.point()))
                             } else {
                                 let promoted = if chess == Chess::Pawn && captured == Chess::Pawn {
                                     Chess::Drone
-                                } else if chess == Chess::Pawn && captured == Chess::Drone {
-                                    Chess::Queen
-                                } else if chess == Chess::Drone && captured == Chess::Pawn {
+                                } else if chess == Chess::Pawn && captured == Chess::Drone
+                                    || chess == Chess::Drone && captured == Chess::Pawn
+                                {
                                     Chess::Queen
                                 } else {
                                     return Err(InvalidMovement);
                                 };
                                 let zone = self.get_zone(&player);
                                 if zone.iter().flatten().all(|grid| grid != &Some(promoted)) {
-                                    return Ok(Effect::Promotion(promoted));
+                                    Ok(Effect::Promotion(promoted))
                                 } else {
-                                    return Err(InvalidMovement);
+                                    Err(InvalidMovement)
                                 }
                             }
                         }
                     }
                 }
-                _ => return Err(InvalidMovement),
+                _ => Err(InvalidMovement),
             }
         }
 
@@ -334,7 +346,7 @@ mod model {
                     }
                 }
             }
-            return vec;
+            vec
         }
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
@@ -401,20 +413,14 @@ mod model {
 
     impl Decidable for Playfield {
         type Action = (Point, Action);
-        type Score = (i32, bool);
+        type Score = (bool, i32);
 
         fn valid_actions(&self) -> Vec<Self::Action> {
             let mut res = Vec::new();
             match self.state {
                 GameState::Turn(player) => {
-                    let range = match player {
-                        Player::Player1 => 0..4,
-                        Player::Player2 => 4..8,
-                    };
-                    for y in range {
-                        for x in 0..4 {
-                            res.append(&mut self.possible_actions_at(&Point(y, x)))
-                        }
+                    for point in self.get_zone_positions(&player) {
+                        res.append(&mut self.possible_actions_at(&point))
                     }
                 }
                 GameState::Win(_) => {}
@@ -426,16 +432,16 @@ mod model {
         }
 
         fn apply_action(&self, action: &Self::Action) -> Self {
-            let mut state = self.clone();
+            let mut state = *self;
             state.unsafe_apply_action(&action.1);
             state
         }
 
         fn score(&self) -> Self::Score {
-            return (
-                self.scores[0] - self.scores[1],
+            (
                 self.state == GameState::Win(Player::Player1),
-            );
+                self.scores[0] - self.scores[1],
+            )
         }
     }
 }
@@ -567,7 +573,7 @@ mod tui {
         noecho();
 
         loop {
-            controller.render(&window);
+            controller.render(window);
             match window.getch() {
                 Some(Input::Character('q')) => break,
                 Some(Input::KeyUp) => controller.up(),
@@ -672,31 +678,29 @@ mod tui {
             let score1 = self.playfield.get_score(&model::Player::Player1);
             let score2 = self.playfield.get_score(&model::Player::Player2);
 
-            for y in 0..8 {
-                for x in 0..4 {
-                    let sym = match board[y][x] {
-                        Some(model::Chess::Pawn) => "*",
-                        Some(model::Chess::Drone) => "o",
-                        Some(model::Chess::Queen) => "@",
-                        None => ".",
-                    };
-                    if highlighted.contains(&Point(y as i32, x as i32)) {
-                        window.attron(pancurses::A_BOLD);
-                    }
-                    if bracketed.contains(&Point(y as i32, x as i32)) {
-                        window.attron(pancurses::A_UNDERLINE);
-                    }
-                    window.mv(y as i32 + offset.0, x as i32 * 2 + 1 + offset.1);
-                    window.addstr(sym);
-                    window.attroff(pancurses::A_BOLD);
-                    window.attroff(pancurses::A_UNDERLINE);
+            for pos @ Point(y, x) in self.playfield.get_board_positions() {
+                let sym = match board[y as usize][x as usize] {
+                    Some(model::Chess::Pawn) => "*",
+                    Some(model::Chess::Drone) => "o",
+                    Some(model::Chess::Queen) => "@",
+                    None => ".",
+                };
+                if highlighted.contains(&pos) {
+                    window.attron(pancurses::A_BOLD);
+                }
+                if bracketed.contains(&pos) {
+                    window.attron(pancurses::A_UNDERLINE);
+                }
+                window.mv(y + offset.0, x * 2 + 1 + offset.1);
+                window.addstr(sym);
+                window.attroff(pancurses::A_BOLD);
+                window.attroff(pancurses::A_UNDERLINE);
 
-                    if y as i32 == self.cursor.0 && x as i32 == self.cursor.1 {
-                        window.mv(y as i32 + offset.0, x as i32 * 2 + offset.1);
-                        window.addstr("[");
-                        window.mv(y as i32 + offset.0, x as i32 * 2 + 2 + offset.1);
-                        window.addstr("]");
-                    }
+                if pos == self.cursor {
+                    window.mv(y + offset.0, x * 2 + offset.1);
+                    window.addstr("[");
+                    window.mv(y + offset.0, x * 2 + 2 + offset.1);
+                    window.addstr("]");
                 }
             }
 
@@ -733,7 +737,7 @@ mod tui {
                 }
             }
 
-            window.mv(0 + offset.0, 12 + offset.1);
+            window.mv(offset.0, 12 + offset.1);
             match state {
                 model::GameState::Turn(model::Player::Player1) => {
                     window.addstr(format!("{}: <{}>", player1, score1));
@@ -874,14 +878,14 @@ mod algo {
     {
         fn root(state: &T, depth: u32) -> Vec<Self> {
             let actions = state.valid_actions();
-            return actions
+            actions
                 .into_iter()
                 .map(|action| DecisionTree {
                     state: state.apply_action(&action),
                     action,
                     depth,
                 })
-                .collect();
+                .collect()
         }
     }
 
@@ -895,17 +899,17 @@ mod algo {
                 return Err(self.state.score());
             }
             let actions = self.state.valid_actions();
-            if actions.len() == 0 {
-                return Err(self.state.score());
+            if actions.is_empty() {
+                Err(self.state.score())
             } else {
-                return Ok(actions
+                Ok(actions
                     .into_iter()
                     .map(|action| DecisionTree {
                         state: self.state.apply_action(&action),
                         action,
                         depth: self.depth - 1,
                     })
-                    .collect());
+                    .collect())
             }
         }
     }
@@ -922,6 +926,7 @@ mod algo {
             value = ExtendedOrd::Smallest;
             for subnode in subnodes {
                 let value_ = minimax(&subnode, !maximize, value, ExtendedOrd::Largest);
+                debug_assert!(value_ != ExtendedOrd::Largest);
                 match value_.cmp(&value) {
                     Ordering::Greater => {
                         value = value_;
@@ -938,6 +943,7 @@ mod algo {
             value = ExtendedOrd::Largest;
             for subnode in subnodes {
                 let value_ = minimax(&subnode, !maximize, ExtendedOrd::Smallest, value);
+                debug_assert!(value_ != ExtendedOrd::Smallest);
                 match value_.cmp(&value) {
                     Ordering::Less => {
                         value = value_;
@@ -982,7 +988,7 @@ fn main() {
                 } else if buf == "3\n" {
                     tui::GameMode::BotHuman(3)
                 } else if buf == "4\n" {
-                    tui::GameMode::TwoBots(4, 3)
+                    tui::GameMode::TwoBots(3, 3)
                 } else {
                     return;
                 };
@@ -998,6 +1004,6 @@ fn main() {
         let mut playfield = model::Playfield::init();
         let mut board = tui::Board::init(&mut playfield, mode);
 
-        tui::control(&window, &mut board);
+        tui::control(window, &mut board);
     })
 }
