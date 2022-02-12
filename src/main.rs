@@ -805,6 +805,7 @@ mod algo {
         maximize: bool,
         mut alpha: ExtendedOrd<R>,
         mut beta: ExtendedOrd<R>,
+        is_root: bool,
     ) -> ExtendedOrd<R>
     where
         T: TreeLike<R>,
@@ -815,13 +816,16 @@ mod algo {
                 Ok(subnodes) => {
                     let mut value = ExtendedOrd::Smallest;
                     for subnode in subnodes {
+                        if !is_root && value == beta {
+                            return beta;
+                        }
                         if value > beta {
                             return ExtendedOrd::Largest;
                         }
                         if value > alpha {
                             alpha = value;
                         }
-                        let subvalue = minimax(&subnode, !maximize, alpha, beta);
+                        let subvalue = minimax(&subnode, !maximize, alpha, beta, false);
                         if subvalue > value {
                             value = subvalue;
                         }
@@ -835,13 +839,16 @@ mod algo {
                 Ok(subnodes) => {
                     let mut value = ExtendedOrd::Largest;
                     for subnode in subnodes {
+                        if !is_root && value == alpha {
+                            return alpha;
+                        }
                         if value < alpha {
                             return ExtendedOrd::Smallest;
                         }
                         if value < beta {
                             beta = value;
                         }
-                        let subvalue = minimax(&subnode, !maximize, alpha, beta);
+                        let subvalue = minimax(&subnode, !maximize, alpha, beta, false);
                         if subvalue < value {
                             value = subvalue;
                         }
@@ -925,7 +932,7 @@ mod algo {
         if maximize {
             value = ExtendedOrd::Smallest;
             for subnode in subnodes {
-                let value_ = minimax(&subnode, !maximize, value, ExtendedOrd::Largest);
+                let value_ = minimax(&subnode, !maximize, value, ExtendedOrd::Largest, true);
                 debug_assert!(value_ != ExtendedOrd::Largest);
                 match value_.cmp(&value) {
                     Ordering::Greater => {
@@ -942,7 +949,7 @@ mod algo {
         } else {
             value = ExtendedOrd::Largest;
             for subnode in subnodes {
-                let value_ = minimax(&subnode, !maximize, ExtendedOrd::Smallest, value);
+                let value_ = minimax(&subnode, !maximize, ExtendedOrd::Smallest, value, true);
                 debug_assert!(value_ != ExtendedOrd::Smallest);
                 match value_.cmp(&value) {
                     Ordering::Less => {
@@ -988,7 +995,7 @@ fn main() {
                 } else if buf == "3\n" {
                     tui::GameMode::BotHuman(3)
                 } else if buf == "4\n" {
-                    tui::GameMode::TwoBots(3, 3)
+                    tui::GameMode::TwoBots(4, 4)
                 } else {
                     return;
                 };
