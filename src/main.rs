@@ -220,16 +220,20 @@ mod model {
             }
         }
 
-        pub fn get_board_positions(&self) -> impl Iterator<Item=Point> {
-            (0..8).into_iter().flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
+        pub fn get_board_positions(&self) -> impl Iterator<Item = Point> {
+            (0..8)
+                .into_iter()
+                .flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
         }
 
-        pub fn get_zone_positions(&self, player: &Player) -> impl Iterator<Item=Point> {
+        pub fn get_zone_positions(&self, player: &Player) -> impl Iterator<Item = Point> {
             let range = match player {
                 Player::Player1 => (0..4),
                 Player::Player2 => (4..8),
             };
-            range.into_iter().flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
+            range
+                .into_iter()
+                .flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
         }
 
         pub fn get_score(&self, player: &Player) -> &i32 {
@@ -523,7 +527,7 @@ mod tui {
             self.state = match algo::decide(self.playfield, level, is_first) {
                 None => ControlState::BotHalt,
                 Some((position, action)) => ControlState::BotMove { position, action },
-            };
+            }
         }
 
         fn get_highlighted(&self) -> Vec<Point> {
@@ -786,8 +790,9 @@ mod tui {
 }
 
 mod algo {
-    use rand::seq::SliceRandom;
     use std::cmp::Ordering;
+
+    use rand::Rng;
 
     trait TreeLike<L>: Sized {
         fn next(&self) -> Result<Vec<Self>, L>;
@@ -967,9 +972,14 @@ mod algo {
         if let ExtendedOrd::Smallest | ExtendedOrd::Largest = value {
             return None;
         }
-        let mut rng = rand::thread_rng();
-        decisions.shuffle(&mut rng);
-        decisions.pop()
+        let len = decisions.len();
+        if len == 0 {
+            None
+        } else {
+            let mut rng = rand::thread_rng();
+            let n = (rng.gen::<f64>() * len as f64) as usize;
+            Some(decisions.remove(n))
+        }
     }
 }
 
