@@ -26,7 +26,7 @@ mod model {
     use super::utils::Point;
     use std::cmp::Ordering;
     use std::vec::Vec;
-
+    
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Chess {
         Pawn,
@@ -74,6 +74,101 @@ mod model {
         QueenUpRight(usize),
         QueenDownLeft(usize),
         QueenDownRight(usize),
+    }
+
+    impl std::fmt::Display for Movement {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Movement::PawnUpLeft => write!(f, "Pul"),
+                Movement::PawnUpRight => write!(f, "Pur"),
+                Movement::PawnDownLeft => write!(f, "Pdl"),
+                Movement::PawnDownRight => write!(f, "Pdr"),
+                Movement::DroneUp => write!(f, "Du"),
+                Movement::DroneUp2 => write!(f, "Du2"),
+                Movement::DroneDown => write!(f, "Dd"),
+                Movement::DroneDown2 => write!(f, "Dd2"),
+                Movement::DroneLeft => write!(f, "Dl"),
+                Movement::DroneLeft2 => write!(f, "Dl2"),
+                Movement::DroneRight => write!(f, "Dr"),
+                Movement::DroneRight2 => write!(f, "Dr2"),
+                Movement::QueenUp(0) => write!(f, "Qu"),
+                Movement::QueenDown(0) => write!(f, "Qd"),
+                Movement::QueenLeft(0) => write!(f, "Ql"),
+                Movement::QueenRight(0) => write!(f, "Qr"),
+                Movement::QueenUpLeft(0) => write!(f, "Qul"),
+                Movement::QueenUpRight(0) => write!(f, "Qur"),
+                Movement::QueenDownLeft(0) => write!(f, "Qdl"),
+                Movement::QueenDownRight(0) => write!(f, "Qdr"),
+                Movement::QueenUp(n) => write!(f, "Qu{}", n + 1),
+                Movement::QueenDown(n) => write!(f, "Qd{}", n + 1),
+                Movement::QueenLeft(n) => write!(f, "Ql{}", n + 1),
+                Movement::QueenRight(n) => write!(f, "Qr{}", n + 1),
+                Movement::QueenUpLeft(n) => write!(f, "Qul{}", n + 1),
+                Movement::QueenUpRight(n) => write!(f, "Qur{}", n + 1),
+                Movement::QueenDownLeft(n) => write!(f, "Qdl{}", n + 1),
+                Movement::QueenDownRight(n) => write!(f, "Qdr{}", n + 1),
+            }
+        }
+    }
+
+    pub struct ParseMovementError;
+
+    impl std::str::FromStr for Movement {
+        type Err = ParseMovementError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            match s {
+                "Pul" => Ok(Movement::PawnUpLeft),
+                "Pur" => Ok(Movement::PawnUpRight),
+                "Pdl" => Ok(Movement::PawnDownLeft),
+                "Pdr" => Ok(Movement::PawnDownRight),
+                "Du" => Ok(Movement::DroneUp),
+                "Du2" => Ok(Movement::DroneUp2),
+                "Dd" => Ok(Movement::DroneDown),
+                "Dd2" => Ok(Movement::DroneDown2),
+                "Dl" => Ok(Movement::DroneLeft),
+                "Dl2" => Ok(Movement::DroneLeft2),
+                "Dr" => Ok(Movement::DroneRight),
+                "Dr2" => Ok(Movement::DroneRight2),
+                s if s.starts_with('Q') => {
+                    fn parse_n(n: &str) -> Result<usize, ParseMovementError> {
+                        if n.is_empty() {
+                            return Ok(0);
+                        }
+                        n.parse::<usize>()
+                            .map_err(|_| ParseMovementError)
+                            .and_then(|n| {
+                                if n == 0 {
+                                    Err(ParseMovementError)
+                                } else {
+                                    Ok(n - 1)
+                                }
+                            })
+                    }
+
+                    if let Some(n) = s.strip_prefix("Qul") {
+                        parse_n(n).map(Movement::QueenUpLeft)
+                    } else if let Some(n) = s.strip_prefix("Qur") {
+                        parse_n(n).map(Movement::QueenUpRight)
+                    } else if let Some(n) = s.strip_prefix("Qdl") {
+                        parse_n(n).map(Movement::QueenDownLeft)
+                    } else if let Some(n) = s.strip_prefix("Qdr") {
+                        parse_n(n).map(Movement::QueenDownRight)
+                    } else if let Some(n) = s.strip_prefix("Qu") {
+                        parse_n(n).map(Movement::QueenUp)
+                    } else if let Some(n) = s.strip_prefix("Qd") {
+                        parse_n(n).map(Movement::QueenDown)
+                    } else if let Some(n) = s.strip_prefix("Ql") {
+                        parse_n(n).map(Movement::QueenLeft)
+                    } else if let Some(n) = s.strip_prefix("Qr") {
+                        parse_n(n).map(Movement::QueenRight)
+                    } else {
+                        Err(ParseMovementError)
+                    }
+                }
+                _ => Err(ParseMovementError),
+            }
+        }
     }
 
     impl Movement {
@@ -162,6 +257,12 @@ mod model {
         }
     }
 
+    impl std::fmt::Display for Action {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}{}{}", self.position.0, self.position.1, self.movement)
+        }
+    }
+
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub struct OutOfBounds;
 
@@ -183,6 +284,23 @@ mod model {
         scores: [i32; 2],
         state: GameState,
         previous: Option<Action>,
+    }
+
+    impl std::fmt::Display for Playfield {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            for y in 0..8 {
+                for x in 0..4 {
+                    match &self.board[y][x] {
+                        None => write!(f, ". ")?,
+                        Some(Chess::Pawn) => write!(f, "* ")?,
+                        Some(Chess::Drone) => write!(f, "o ")?,
+                        Some(Chess::Queen) => write!(f, "@ ")?,
+                    }
+                }
+                writeln!(f)?;
+            }
+            write!(f, "[{}:{}]", self.scores[0], self.scores[1])
+        }
     }
 
     impl Playfield {
@@ -351,6 +469,48 @@ mod model {
                 }
             }
             vec
+        }
+
+        pub fn parse_action(&self, input: &str) -> Result<Action, InvalidAction> {
+            let input = input.trim();
+            if input.len() < 2 {
+                return Err(InvalidAction);
+            }
+            let position =
+                if let (Ok(x), Ok(y)) = (input[0..1].parse::<i32>(), input[1..2].parse::<i32>()) {
+                    Point(x, y)
+                } else {
+                    return Err(InvalidAction);
+                };
+
+            let player = if let Ok((player, Some(_))) = self.try_get_chess(&position) {
+                player
+            } else {
+                return Err(InvalidAction);
+            };
+
+            let movement = if let Ok(movement) = input[2..].parse::<Movement>() {
+                movement
+            } else {
+                return Err(InvalidAction);
+            };
+
+            let action = if let Ok(effect) = self.try_get_effect(&position, &movement) {
+                Action {
+                    player,
+                    position,
+                    movement,
+                    effect,
+                }
+            } else {
+                return Err(InvalidAction);
+            };
+
+            if self.is_valid_action(&action) {
+                Ok(action)
+            } else {
+                Err(InvalidAction)
+            }
         }
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
@@ -994,6 +1154,8 @@ mod algo {
 
 use std::io::Write;
 
+const TEXT_MODE: bool = true;
+
 fn main() {
     let mut buf = String::new();
     println!("please select game mode");
@@ -1005,31 +1167,107 @@ fn main() {
     let mode = loop {
         print!(":");
         std::io::stdout().flush().expect("Could not flush stdout");
-        match (std::io::stdin().read_line(&mut buf), buf.as_str()) {
-            (Ok(_), "0\n" | "1\n" | "2\n" | "3\n" | "4\n") => {
-                break if buf == "1\n" {
-                    tui::GameMode::TwoHumans
-                } else if buf == "2\n" {
-                    tui::GameMode::HumanBot(3)
-                } else if buf == "3\n" {
-                    tui::GameMode::BotHuman(3)
-                } else if buf == "4\n" {
-                    tui::GameMode::TwoBots(4, 4)
-                } else {
-                    return;
-                };
-            }
-            _ => {
-                println!("please input number 0~4");
-                buf.clear();
-            }
+        buf.clear();
+        std::io::stdin().read_line(&mut buf).unwrap();
+        match buf.trim() {
+            "1" => break tui::GameMode::TwoHumans,
+            "2" => break tui::GameMode::HumanBot(3),
+            "3" => break tui::GameMode::BotHuman(3),
+            "4" => break tui::GameMode::TwoBots(3, 3),
+            _ => println!("please input number 0~4"),
         }
     };
 
-    tui::execute_in_window(|window| {
+    if TEXT_MODE {
         let mut playfield = model::Playfield::init();
-        let mut board = tui::Board::init(&mut playfield, mode);
+        loop {
+            println!("{}", playfield);
+            match (playfield.get_state(), mode) {
+                (model::GameState::Win(player), _) => {
+                    match player {
+                        model::Player::Player1 => {
+                            println!("player 1 win");
+                        }
+                        model::Player::Player2 => {
+                            println!("player 2 win");
+                        }
+                    }
+                    break;
+                }
 
-        tui::control(window, &mut board);
-    })
+                (
+                    model::GameState::Turn(player @ model::Player::Player1),
+                    tui::GameMode::TwoHumans | tui::GameMode::HumanBot(_),
+                )
+                | (
+                    model::GameState::Turn(player @ model::Player::Player2),
+                    tui::GameMode::TwoHumans | tui::GameMode::BotHuman(_),
+                ) => {
+                    match player {
+                        model::Player::Player1 => {
+                            println!("player 1 turn");
+                        }
+                        model::Player::Player2 => {
+                            println!("player 2 turn");
+                        }
+                    }
+                    loop {
+                        print!(":");
+                        std::io::stdout().flush().expect("Could not flush stdout");
+                        buf.clear();
+                        std::io::stdin().read_line(&mut buf).unwrap();
+                        match playfield.parse_action(&*buf) {
+                            Ok(action) => {
+                                playfield.try_apply_action(&action).unwrap();
+                                break;
+                            }
+                            Err(_) => {
+                                println!("invalid action");
+                            }
+                        }
+                    }
+                }
+
+                (
+                    model::GameState::Turn(player @ model::Player::Player1),
+                    tui::GameMode::BotHuman(level) | tui::GameMode::TwoBots(level, _),
+                )
+                | (
+                    model::GameState::Turn(player @ model::Player::Player2),
+                    tui::GameMode::HumanBot(level) | tui::GameMode::TwoBots(_, level),
+                ) => {
+                    let is_first =
+                        playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
+                    match algo::decide(&playfield, level, is_first) {
+                        None => {
+                            println!("bot halt");
+                            return;
+                        }
+                        Some((_, action)) => {
+                            match player {
+                                model::Player::Player1 => {
+                                    println!("bot 1 turn");
+                                }
+                                model::Player::Player2 => {
+                                    println!("bot 2 turn");
+                                }
+                            }
+                            print!(":{}", action);
+                            std::io::stdout().flush().expect("Could not flush stdout");
+                            buf.clear();
+                            std::io::stdin().read_line(&mut buf).unwrap();
+                            playfield.try_apply_action(&action).unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        tui::execute_in_window(|window| {
+            let mut playfield = model::Playfield::init();
+            let mut board = tui::Board::init(&mut playfield, mode);
+
+            tui::control(window, &mut board);
+        })
+    }
 }
