@@ -25,8 +25,9 @@ mod model {
     use super::algo::Decidable;
     use super::utils::Point;
     use std::cmp::Ordering;
+    use std::fmt::Display;
     use std::vec::Vec;
-    
+
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Chess {
         Pawn,
@@ -76,7 +77,7 @@ mod model {
         QueenDownRight(usize),
     }
 
-    impl std::fmt::Display for Movement {
+    impl Display for Movement {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Movement::PawnUpLeft => write!(f, "Pul"),
@@ -251,13 +252,17 @@ mod model {
     }
 
     impl Action {
+        pub fn position(&self) -> Point {
+            self.position
+        }
+
         pub fn goal(&self) -> Point {
             let (_, dir, cross) = self.movement.value();
             self.position + dir * (cross as i32 + 1)
         }
     }
 
-    impl std::fmt::Display for Action {
+    impl Display for Action {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "{}{}{}", self.position.0, self.position.1, self.movement)
         }
@@ -286,9 +291,12 @@ mod model {
         previous: Option<Action>,
     }
 
-    impl std::fmt::Display for Playfield {
+    impl Display for Playfield {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "  0 1 2 3")?;
+            writeln!(f)?;
             for y in 0..8 {
+                write!(f, "{} ", y)?;
                 for x in 0..4 {
                     match &self.board[y][x] {
                         None => write!(f, ". ")?,
@@ -308,7 +316,7 @@ mod model {
             let p = Some(Chess::Pawn);
             let d = Some(Chess::Drone);
             let q = Some(Chess::Queen);
-            let n = Option::<Chess>::None;
+            let n = None;
 
             Playfield {
                 board: [
@@ -575,9 +583,22 @@ mod model {
         }
     }
 
+    #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    pub enum Advantage {
+        Player2Win(i32),
+        StillGaming(i32),
+        Player1Win(i32),
+    }
+
+    impl Display for Advantage {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self)
+        }
+    }
+
     impl Decidable for Playfield {
-        type Action = (Point, Action);
-        type Score = (bool, i32);
+        type Action = Action;
+        type Score = Advantage;
 
         fn valid_actions(&self) -> Vec<Self::Action> {
             let mut res = Vec::new();
@@ -591,21 +612,22 @@ mod model {
             }
             res.into_iter()
                 .filter(|action| self.unsafe_is_valid_action(action))
-                .map(|action| (action.position, action))
                 .collect()
         }
 
         fn apply_action(&self, action: &Self::Action) -> Self {
             let mut state = *self;
-            state.unsafe_apply_action(&action.1);
+            state.unsafe_apply_action(action);
             state
         }
 
         fn score(&self) -> Self::Score {
-            (
-                self.state == GameState::Win(Player::Player1),
-                self.scores[0] - self.scores[1],
-            )
+            let adv = self.scores[0] - self.scores[1];
+            match self.state {
+                GameState::Win(Player::Player1) => Advantage::Player1Win(adv),
+                GameState::Win(Player::Player2) => Advantage::Player2Win(adv),
+                _ => Advantage::StillGaming(adv),
+            }
         }
     }
 }
@@ -686,7 +708,10 @@ mod tui {
                 self.playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
             self.state = match algo::decide(self.playfield, level, is_first) {
                 None => ControlState::BotHalt,
-                Some((position, action)) => ControlState::BotMove { position, action },
+                Some(action) => ControlState::BotMove {
+                    position: action.position(),
+                    action,
+                },
             }
         }
 
@@ -1243,7 +1268,7 @@ fn main() {
                             println!("bot halt");
                             return;
                         }
-                        Some((_, action)) => {
+                        Some(action) => {
                             match player {
                                 model::Player::Player1 => {
                                     println!("bot 1 turn");
