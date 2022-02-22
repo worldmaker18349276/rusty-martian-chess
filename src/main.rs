@@ -975,7 +975,7 @@ mod tui {
 }
 
 mod algo {
-    use std::cmp::Ordering;
+    use std::{cmp::Ordering, fmt::Display};
 
     use rand::Rng;
 
@@ -984,7 +984,7 @@ mod algo {
     }
 
     #[derive(Copy, Clone, Ord, Eq, PartialOrd, PartialEq)]
-    enum ExtendedOrd<R> {
+    pub enum ExtendedOrd<R> {
         Smallest,
         Normal(R),
         Largest,
@@ -1058,6 +1058,7 @@ mod algo {
         fn score(&self) -> Self::Score;
     }
 
+    #[derive(Clone)]
     struct DecisionTree<T>
     where
         T: Decidable,
@@ -1111,7 +1112,7 @@ mod algo {
         }
     }
 
-    pub fn decide_multilpe<T>(state: &T, depth: u32, maximize: bool) -> Vec<T::Action>
+    fn decide_multilpe<T>(state: &T, depth: u32, maximize: bool) -> Vec<T::Action>
     where
         T: Decidable,
         T::Score: Ord + Copy,
@@ -1175,11 +1176,117 @@ mod algo {
             Some(decisions.remove(n))
         }
     }
+
+    fn minimax_path<T, R>(
+        nodes: Vec<T>,
+        maximize: bool,
+        mut alpha: ExtendedOrd<R>,
+        mut beta: ExtendedOrd<R>,
+    ) -> (ExtendedOrd<R>, Vec<Vec<T>>)
+    where
+        T: TreeLike<R> + Clone,
+        R: Ord + Copy,
+    {
+        if maximize {
+            let mut decisions = Vec::new();
+            let mut value = ExtendedOrd::Smallest;
+            for node in nodes {
+                if value > beta {
+                    return (ExtendedOrd::Largest, vec![]);
+                }
+                if value > alpha {
+                    alpha = value;
+                }
+                let (subvalue, subdecisions) = match node.next() {
+                    Ok(subnodes) => minimax_path(subnodes, !maximize, alpha, beta),
+                    Err(res) => (ExtendedOrd::Normal(res), vec![vec![]]),
+                };
+                if subvalue > value {
+                    value = subvalue;
+                    decisions.clear();
+                }
+                if subvalue == value {
+                    for mut path in subdecisions {
+                        path.insert(0, node.clone());
+                        decisions.push(path);
+                    }
+                }
+            }
+            (value, decisions)
+        } else {
+            let mut decisions = Vec::new();
+            let mut value = ExtendedOrd::Largest;
+            for node in nodes {
+                if value < alpha {
+                    return (ExtendedOrd::Smallest, vec![]);
+                }
+                if value < beta {
+                    beta = value;
+                }
+                let (subvalue, subdecisions) = match node.next() {
+                    Ok(subnodes) => minimax_path(subnodes, !maximize, alpha, beta),
+                    Err(res) => (ExtendedOrd::Normal(res), vec![vec![]]),
+                };
+                if subvalue < value {
+                    value = subvalue;
+                    decisions.clear();
+                }
+                if subvalue == value {
+                    for mut path in subdecisions {
+                        path.insert(0, node.clone());
+                        decisions.push(path);
+                    }
+                }
+            }
+            (value, decisions)
+        }
+    }
+
+    fn decide_paths<T>(
+        state: &T,
+        depth: u32,
+        maximize: bool,
+    ) -> (ExtendedOrd<T::Score>, Vec<Vec<T::Action>>)
+    where
+        T: Decidable + Clone,
+        T::Action: Clone,
+        T::Score: Ord + Copy,
+    {
+        let subnodes = DecisionTree::root(state, depth);
+        let (value, decisions) = minimax_path(
+            subnodes,
+            maximize,
+            ExtendedOrd::Smallest,
+            ExtendedOrd::Largest,
+        );
+        let decisions = decisions
+            .into_iter()
+            .map(|path| path.into_iter().map(|node| node.action).collect())
+            .collect();
+        (value, decisions)
+    }
+
+    pub fn decide_path<T>(state: &T, depth: u32, maximize: bool) -> Option<Vec<T::Action>>
+    where
+        T: Decidable + Clone + Display,
+        T::Action: Clone + Display,
+        T::Score: Ord + Copy + Display,
+    {
+        let (_, mut decisions) = decide_paths(state, depth, maximize);
+        let len = decisions.len();
+        if len == 0 {
+            None
+        } else {
+            let n = rand::thread_rng().gen::<f64>();
+            let n = (n * len as f64) as usize;
+            Some(decisions.remove(n))
+        }
+    }
 }
 
 use std::io::Write;
 
-const TEXT_MODE: bool = true;
+const TEXT_MODE: bool = false;
 
 fn main() {
     let mut buf = String::new();
@@ -1263,6 +1370,31 @@ fn main() {
                 ) => {
                     let is_first =
                         playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
+                    // match algo::decide_path(&playfield, level, is_first) {
+                    //     None => {
+                    //         println!("bot halt");
+                    //         return;
+                    //     }
+                    //     Some(mut path) => {
+                    //         match player {
+                    //             model::Player::Player1 => {
+                    //                 println!("bot 1 turn");
+                    //             }
+                    //             model::Player::Player2 => {
+                    //                 println!("bot 2 turn");
+                    //             }
+                    //         }
+                    //         print!(":");
+                    //         for action in path.iter() {
+                    //             print!("{} ", action);
+                    //         }
+                    //         std::io::stdout().flush().expect("Could not flush stdout");
+                    //         let action = path.remove(0);
+                    //         buf.clear();
+                    //         std::io::stdin().read_line(&mut buf).unwrap();
+                    //         playfield.try_apply_action(&action).unwrap();
+                    //     }
+                    // }
                     match algo::decide(&playfield, level, is_first) {
                         None => {
                             println!("bot halt");
