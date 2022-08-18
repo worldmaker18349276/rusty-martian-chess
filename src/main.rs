@@ -416,7 +416,7 @@ mod model {
             &self.board
         }
 
-        pub fn get_zone(&self, player: &Player) -> &[[Option<Chess>; 4]] {
+        fn get_zone(&self, player: &Player) -> &[[Option<Chess>; 4]] {
             match player {
                 Player::Player1 => &self.board[0..4],
                 Player::Player2 => &self.board[4..8],
@@ -429,7 +429,7 @@ mod model {
                 .flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
         }
 
-        pub fn get_zone_positions(&self, player: &Player) -> impl Iterator<Item = Point> {
+        fn get_zone_positions(&self, player: &Player) -> impl Iterator<Item = Point> {
             let range = match player {
                 Player::Player1 => (0..4),
                 Player::Player2 => (4..8),
@@ -450,10 +450,7 @@ mod model {
             &self.state
         }
 
-        pub fn try_get_chess(
-            &self,
-            position: &Point,
-        ) -> Result<(Player, Option<Chess>), OutOfBounds> {
+        fn try_get_chess(&self, position: &Point) -> Result<(Player, Option<Chess>), OutOfBounds> {
             if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
                 Ok((
                     Player::Player1,
@@ -469,7 +466,7 @@ mod model {
             }
         }
 
-        pub fn try_get_owner(position: &Point) -> Result<Player, OutOfBounds> {
+        fn try_get_owner(position: &Point) -> Result<Player, OutOfBounds> {
             if position.0 >= 0 && position.0 < 4 && position.1 >= 0 && position.1 < 4 {
                 Ok(Player::Player1)
             } else if position.0 >= 4 && position.0 < 8 && position.1 >= 0 && position.1 < 4 {
@@ -479,7 +476,7 @@ mod model {
             }
         }
 
-        pub fn is_empty_at(&self, position: &Point) -> bool {
+        fn is_empty_at(&self, position: &Point) -> bool {
             // if let Ok((_, None)) = self.try_get_chess(position) { player_ == player } else { false }
             if position.0 >= 0 && position.0 < 8 && position.1 >= 0 && position.1 < 4 {
                 self.board[position.0 as usize][position.1 as usize] == None
@@ -488,7 +485,7 @@ mod model {
             }
         }
 
-        pub fn try_get_effect(
+        fn try_get_effect(
             &self,
             position: &Point,
             movement: &Movement,
@@ -804,53 +801,40 @@ mod playfield {
         }
 
         fn enter(&mut self) {
-            match (&self.state, self.game.try_get_chess(&self.cursor)) {
-                (_, Err(_)) | (ControlState::Pick, Ok((_, None))) | (ControlState::BotHalt, _) => {}
-                (ControlState::Pick, Ok((player, Some(_))))
-                    if &model::GameState::Turn(player) != self.game.get_state() => {}
-                (ControlState::Pick, Ok((_, Some(_)))) => {
-                    self.state = ControlState::Move {
-                        position: self.cursor,
-                        actions: self
-                            .game
-                            .possible_actions_at(&self.cursor)
-                            .into_iter()
-                            .filter(|action| self.game.is_valid_action(action))
-                            .collect(),
-                    };
-                }
-                (
-                    ControlState::Move {
-                        position,
-                        actions: _,
-                    },
-                    _,
-                ) if &self.cursor == position => {
-                    self.state = ControlState::Pick;
-                }
-                (
-                    ControlState::Move {
-                        position: _,
-                        actions,
-                    },
-                    _,
-                ) => {
-                    if let Some(action) = actions.iter().find(|action| action.goal() == self.cursor)
+            match &self.state {
+                ControlState::BotHalt => {}
+
+                ControlState::Pick => {
+                    if self.game.get_board()[self.cursor.0 as usize][self.cursor.1 as usize]
+                        .is_some()
                     {
-                        if let Ok(()) = self.game.try_apply_action(action) {
+                        self.state = ControlState::Move {
+                            position: self.cursor,
+                            actions: self
+                                .game
+                                .possible_actions_at(&self.cursor)
+                                .into_iter()
+                                .filter(|action| self.game.is_valid_action(action))
+                                .collect(),
+                        };
+                    }
+                }
+
+                ControlState::Move { position, actions } => {
+                    if &self.cursor == position {
+                        self.state = ControlState::Pick;
+                    } else if let Some(action) =
+                        actions.iter().find(|action| action.goal() == self.cursor)
+                    {
+                        if self.game.try_apply_action(action).is_ok() {
                             self.state = ControlState::Pick;
                             self.bot_update();
                         }
                     }
                 }
-                (
-                    ControlState::BotMove {
-                        position: _,
-                        action,
-                    },
-                    _,
-                ) => {
-                    if let Ok(()) = self.game.try_apply_action(action) {
+
+                ControlState::BotMove { position: _, action } => {
+                    if self.game.try_apply_action(action).is_ok() {
                         self.state = ControlState::Pick;
                         self.bot_update();
                     }
@@ -1393,14 +1377,12 @@ fn main() {
                         buf.clear();
                         std::io::stdin().read_line(&mut buf).unwrap();
                         match buf.parse::<model::Action>() {
-                            Ok(action) => {
-                                match game.try_apply_action(&action) {
-                                    Ok(_) => break,
-                                    Err(_) => {
-                                        println!("invalid action");
-                                    }
+                            Ok(action) => match game.try_apply_action(&action) {
+                                Ok(_) => break,
+                                Err(_) => {
+                                    println!("invalid action");
                                 }
-                            }
+                            },
                             Err(_) => {
                                 println!("invalid action");
                             }
