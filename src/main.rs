@@ -1327,6 +1327,7 @@ fn main() {
         buf.clear();
         std::io::stdin().read_line(&mut buf).unwrap();
         match buf.trim() {
+            "0" => return,
             "1" => break playfield::GameMode::TwoHumans,
             "2" => break playfield::GameMode::HumanBot(3),
             "3" => break playfield::GameMode::BotHuman(3),
