@@ -423,13 +423,13 @@ mod model {
             }
         }
 
-        pub fn get_board_positions(&self) -> impl Iterator<Item = Point> {
+        pub fn get_board_positions() -> impl Iterator<Item = Point> {
             (0..8)
                 .into_iter()
                 .flat_map(|y| (0..4).into_iter().map(move |x| Point(y, x)))
         }
 
-        fn get_zone_positions(&self, player: &Player) -> impl Iterator<Item = Point> {
+        fn get_zone_positions(player: &Player) -> impl Iterator<Item = Point> {
             let range = match player {
                 Player::Player1 => (0..4),
                 Player::Player2 => (4..8),
@@ -635,7 +635,7 @@ mod model {
             let mut res = Vec::new();
             match self.state {
                 GameState::Turn(player) => {
-                    for point in self.get_zone_positions(&player) {
+                    for point in Game::get_zone_positions(&player) {
                         res.append(&mut self.possible_actions_at(&point))
                     }
                 }
@@ -855,7 +855,7 @@ mod playfield {
             let score1 = self.game.get_score(&model::Player::Player1);
             let score2 = self.game.get_score(&model::Player::Player2);
 
-            for pos @ Point(y, x) in self.game.get_board_positions() {
+            for pos @ Point(y, x) in model::Game::get_board_positions() {
                 let sym = match board[y as usize][x as usize] {
                     Some(model::Chess::Pawn) => "*",
                     Some(model::Chess::Drone) => "o",
