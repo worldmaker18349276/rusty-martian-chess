@@ -26,6 +26,7 @@ mod model {
     use super::utils::Point;
     use std::cmp::Ordering;
     use std::fmt::Display;
+    use std::str::FromStr;
     use std::vec::Vec;
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -41,10 +42,30 @@ mod model {
         }
     }
 
-    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub enum Player {
-        Player1,
-        Player2,
+    impl Display for Chess {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Chess::Pawn => write!(f, "P"),
+                Chess::Drone => write!(f, "D"),
+                Chess::Queen => write!(f, "Q"),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct ParseChessError;
+
+    impl FromStr for Chess {
+        type Err = ParseChessError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            match s {
+                "P" => Ok(Chess::Pawn),
+                "D" => Ok(Chess::Drone),
+                "Q" => Ok(Chess::Queen),
+                _ => Err(ParseChessError),
+            }
+        }
     }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -108,9 +129,10 @@ mod model {
         }
     }
 
+    #[derive(Debug)]
     pub struct ParseMovementError;
 
-    impl std::str::FromStr for Movement {
+    impl FromStr for Movement {
         type Err = ParseMovementError;
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -235,7 +257,7 @@ mod model {
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Effect {
         Move,
-        Capture(i32),
+        Capture(Chess),
         Promotion(Chess),
     }
 
@@ -263,33 +285,24 @@ mod model {
                 Effect::Move => {
                     write!(f, "{}{}{}", self.position.0, self.position.1, self.movement)
                 }
-                Effect::Capture(p) => write!(
+                Effect::Capture(chess) => write!(
                     f,
                     "{}{}{}x{}",
-                    self.position.0, self.position.1, self.movement, p
+                    self.position.0, self.position.1, self.movement, chess
                 ),
-                Effect::Promotion(Chess::Pawn) => write!(
+                Effect::Promotion(chess) => write!(
                     f,
-                    "{}{}{}=P",
-                    self.position.0, self.position.1, self.movement
-                ),
-                Effect::Promotion(Chess::Drone) => write!(
-                    f,
-                    "{}{}{}=D",
-                    self.position.0, self.position.1, self.movement
-                ),
-                Effect::Promotion(Chess::Queen) => write!(
-                    f,
-                    "{}{}{}=Q",
-                    self.position.0, self.position.1, self.movement
+                    "{}{}{}={}",
+                    self.position.0, self.position.1, self.movement, chess
                 ),
             }
         }
     }
 
+    #[derive(Debug)]
     pub struct ParseActionError;
 
-    impl std::str::FromStr for Action {
+    impl FromStr for Action {
         type Err = ParseActionError;
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -307,26 +320,19 @@ mod model {
             };
 
             let effect = match &s[s.len() - 2..s.len() - 1] {
-                "x" => {
-                    let point = if let Ok(point) = s[s.len() - 1..].parse::<i32>() {
-                        point
-                    } else {
-                        return Err(ParseActionError);
-                    };
-                    s = &s[..s.len() - 2];
-                    Effect::Capture(point)
-                }
-                "=" => {
-                    let chess = match &s[s.len() - 1..] {
-                        "P" => Chess::Pawn,
-                        "D" => Chess::Drone,
-                        "Q" => Chess::Queen,
-                        _ => {
+                a @ ("x" | "=") => {
+                    let chess = match &s[s.len() - 1..].parse::<Chess>() {
+                        Err(_) => {
                             return Err(ParseActionError);
                         }
+                        Ok(chess) => *chess,
                     };
                     s = &s[..s.len() - 2];
-                    Effect::Promotion(chess)
+                    if a == "x" {
+                        Effect::Capture(chess)
+                    } else {
+                        Effect::Promotion(chess)
+                    }
                 }
                 _ => Effect::Move,
             };
@@ -350,6 +356,12 @@ mod model {
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub struct InvalidAction;
+
+    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+    pub enum Player {
+        Player1,
+        Player2,
+    }
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum GameState {
@@ -505,7 +517,7 @@ mod model {
                         Ok((_, None)) => Ok(Effect::Move),
                         Ok((owner, Some(captured))) => {
                             if owner != player {
-                                Ok(Effect::Capture(captured.point()))
+                                Ok(Effect::Capture(captured))
                             } else {
                                 let promoted = if chess == Chess::Pawn && captured == Chess::Pawn {
                                     Chess::Drone
@@ -583,12 +595,12 @@ mod model {
                     self.board[start.0 as usize][start.1 as usize] = None;
                     self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
                 }
-                Effect::Capture(point) => {
+                Effect::Capture(captured) => {
                     self.board[start.0 as usize][start.1 as usize] = None;
                     self.board[goal.0 as usize][goal.1 as usize] = Some(chess);
                     match player {
-                        Player::Player1 => self.scores[0] += point,
-                        Player::Player2 => self.scores[1] += point,
+                        Player::Player1 => self.scores[0] += captured.point(),
+                        Player::Player2 => self.scores[1] += captured.point(),
                     }
                 }
                 Effect::Promotion(promoted) => {
