@@ -30,18 +30,14 @@ mod model {
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum Chess {
-        Pawn,
-        Drone,
-        Queen,
+        Pawn = 1,
+        Drone = 2,
+        Queen = 3,
     }
 
     impl Chess {
         fn point(&self) -> i32 {
-            match self {
-                Chess::Pawn => 1,
-                Chess::Drone => 2,
-                Chess::Queen => 3,
-            }
+            *self as i32
         }
     }
 
