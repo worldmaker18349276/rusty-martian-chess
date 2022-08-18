@@ -1020,57 +1020,45 @@ mod algo {
         maximize: bool,
         mut alpha: ExtendedOrd<R>,
         mut beta: ExtendedOrd<R>,
-        is_root: bool,
     ) -> ExtendedOrd<R>
     where
         T: TreeLike<R>,
         R: Ord + Copy,
     {
-        if maximize {
-            match node.next() {
-                Ok(subnodes) => {
+        match node.next() {
+            Err(res) => ExtendedOrd::Normal(res),
+            Ok(subnodes) => {
+                if maximize {
                     let mut value = ExtendedOrd::Smallest;
                     for subnode in subnodes {
-                        if !is_root && value == beta {
-                            return beta;
-                        }
-                        if value > beta {
+                        if value == ExtendedOrd::Largest || value > beta {
                             return ExtendedOrd::Largest;
                         }
                         if value > alpha {
                             alpha = value;
                         }
-                        let subvalue = minimax(&subnode, !maximize, alpha, beta, false);
+                        let subvalue = minimax(&subnode, !maximize, alpha, beta);
                         if subvalue > value {
                             value = subvalue;
                         }
                     }
                     value
-                }
-                Err(res) => ExtendedOrd::Normal(res),
-            }
-        } else {
-            match node.next() {
-                Ok(subnodes) => {
+                } else {
                     let mut value = ExtendedOrd::Largest;
                     for subnode in subnodes {
-                        if !is_root && value == alpha {
-                            return alpha;
-                        }
-                        if value < alpha {
+                        if value == ExtendedOrd::Smallest || value < alpha {
                             return ExtendedOrd::Smallest;
                         }
                         if value < beta {
                             beta = value;
                         }
-                        let subvalue = minimax(&subnode, !maximize, alpha, beta, false);
+                        let subvalue = minimax(&subnode, !maximize, alpha, beta);
                         if subvalue < value {
                             value = subvalue;
                         }
                     }
                     value
                 }
-                Err(res) => ExtendedOrd::Normal(res),
             }
         }
     }
@@ -1100,8 +1088,7 @@ mod algo {
         T::Score: Ord,
     {
         fn root(state: &T, depth: u32) -> Vec<Self> {
-            let actions = state.valid_actions();
-            actions
+            state.valid_actions()
                 .into_iter()
                 .map(|action| DecisionTree {
                     state: state.apply_action(&action),
@@ -1148,7 +1135,7 @@ mod algo {
         if maximize {
             value = ExtendedOrd::Smallest;
             for subnode in subnodes {
-                let value_ = minimax(&subnode, !maximize, value, ExtendedOrd::Largest, true);
+                let value_ = minimax(&subnode, !maximize, value, ExtendedOrd::Largest);
                 debug_assert!(value_ != ExtendedOrd::Largest);
                 match value_.cmp(&value) {
                     Ordering::Greater => {
@@ -1165,7 +1152,7 @@ mod algo {
         } else {
             value = ExtendedOrd::Largest;
             for subnode in subnodes {
-                let value_ = minimax(&subnode, !maximize, ExtendedOrd::Smallest, value, true);
+                let value_ = minimax(&subnode, !maximize, ExtendedOrd::Smallest, value);
                 debug_assert!(value_ != ExtendedOrd::Smallest);
                 match value_.cmp(&value) {
                     Ordering::Less => {
