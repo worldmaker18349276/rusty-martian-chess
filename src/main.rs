@@ -689,15 +689,15 @@ mod playfield {
         TwoBots(u32, u32),
     }
 
-    pub struct Playfield<'a> {
-        game: &'a mut model::Game,
+    pub struct Playfield {
+        game: model::Game,
         cursor: Point,
         state: ControlState,
         mode: GameMode,
     }
 
-    impl<'a> Playfield<'a> {
-        pub fn init(game: &'a mut model::Game, mode: GameMode) -> Self {
+    impl Playfield {
+        pub fn init(game: model::Game, mode: GameMode) -> Self {
             let mut res = Playfield {
                 game,
                 cursor: Point(0, 0),
@@ -734,7 +734,7 @@ mod playfield {
 
         fn bot_move(&mut self, level: u32) {
             let is_first = self.game.get_state() == &model::GameState::Turn(model::Player::Player1);
-            self.state = match algo::decide(self.game, level, is_first) {
+            self.state = match algo::decide(&self.game, level, is_first) {
                 None => ControlState::BotHalt,
                 Some(action) => ControlState::BotMove {
                     position: action.position(),
@@ -772,7 +772,7 @@ mod playfield {
         }
     }
 
-    impl<'a> tui::Controllable for Playfield<'a> {
+    impl tui::Controllable for Playfield {
         fn up(&mut self) {
             if self.cursor.0 > 0 {
                 self.cursor = self.cursor + Point(-1, 0);
@@ -843,9 +843,9 @@ mod playfield {
         }
     }
 
-    impl<'a> tui::Renderable for Playfield<'a> {
+    impl tui::Renderable for Playfield {
         fn render(&mut self, window: &Window) {
-            let offset: &'a _ = &(2, 2);
+            let offset = &(2, 2);
 
             window.clear();
             let highlighted = self.get_highlighted();
@@ -1310,8 +1310,8 @@ fn main() {
         }
     } else {
         tui::execute_in_window(|window| {
-            let mut game = model::Game::init();
-            let mut playfield = playfield::Playfield::init(&mut game, mode);
+            let game = model::Game::init();
+            let mut playfield = playfield::Playfield::init(game, mode);
 
             tui::control(window, &mut playfield);
         })
