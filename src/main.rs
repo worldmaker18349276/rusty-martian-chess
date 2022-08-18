@@ -1394,8 +1394,12 @@ fn main() {
                         std::io::stdin().read_line(&mut buf).unwrap();
                         match buf.parse::<model::Action>() {
                             Ok(action) => {
-                                game.try_apply_action(&action).unwrap();
-                                break;
+                                match game.try_apply_action(&action) {
+                                    Ok(_) => break,
+                                    Err(_) => {
+                                        println!("invalid action");
+                                    }
+                                }
                             }
                             Err(_) => {
                                 println!("invalid action");
