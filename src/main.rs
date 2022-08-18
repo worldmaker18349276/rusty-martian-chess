@@ -284,14 +284,14 @@ mod model {
     }
 
     #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-    pub struct Playfield {
+    pub struct Game {
         board: [[Option<Chess>; 4]; 8],
         scores: [i32; 2],
         state: GameState,
         previous: Option<Action>,
     }
 
-    impl Display for Playfield {
+    impl Display for Game {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "  0 1 2 3")?;
             writeln!(f)?;
@@ -311,14 +311,14 @@ mod model {
         }
     }
 
-    impl Playfield {
-        pub fn init() -> Playfield {
+    impl Game {
+        pub fn init() -> Game {
             let p = Some(Chess::Pawn);
             let d = Some(Chess::Drone);
             let q = Some(Chess::Queen);
             let n = None;
 
-            Playfield {
+            Game {
                 board: [
                     [q, q, d, n],
                     [q, d, p, n],
@@ -596,7 +596,7 @@ mod model {
         }
     }
 
-    impl Decidable for Playfield {
+    impl Decidable for Game {
         type Action = Action;
         type Score = Advantage;
 
@@ -632,12 +632,13 @@ mod model {
     }
 }
 
-mod tui {
-    extern crate pancurses;
+mod playfield {
     use super::algo;
     use super::model;
+    use super::tui;
     use super::utils::Point;
-    use pancurses::{endwin, initscr, noecho, Input, Window};
+    extern crate pancurses;
+    use pancurses::Window;
 
     enum ControlState {
         Pick,
@@ -660,29 +661,29 @@ mod tui {
         TwoBots(u32, u32),
     }
 
-    pub struct Board<'a> {
-        playfield: &'a mut model::Playfield,
+    pub struct Playfield<'a> {
+        game: &'a mut model::Game,
         cursor: Point,
         state: ControlState,
         mode: GameMode,
     }
 
-    impl<'a> Board<'a> {
-        pub fn init(playfield: &'a mut model::Playfield, mode: GameMode) -> Self {
-            let mut res = Board {
-                playfield,
+    impl<'a> Playfield<'a> {
+        pub fn init(game: &'a mut model::Game, mode: GameMode) -> Self {
+            let mut res = Playfield {
+                game,
                 cursor: Point(0, 0),
                 state: ControlState::Pick,
                 mode,
             };
-            if let &model::GameState::Turn(_) = res.playfield.get_state() {
+            if let &model::GameState::Turn(_) = res.game.get_state() {
                 res.bot_update();
             }
             res
         }
 
         fn bot_update(&mut self) {
-            match (self.playfield.get_state(), self.mode) {
+            match (self.game.get_state(), self.mode) {
                 (model::GameState::Win(_), _)
                 | (
                     model::GameState::Turn(model::Player::Player1),
@@ -705,8 +706,8 @@ mod tui {
 
         fn bot_move(&mut self, level: u32) {
             let is_first =
-                self.playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
-            self.state = match algo::decide(self.playfield, level, is_first) {
+                self.game.get_state() == &model::GameState::Turn(model::Player::Player1);
+            self.state = match algo::decide(self.game, level, is_first) {
                 None => ControlState::BotHalt,
                 Some(action) => ControlState::BotMove {
                     position: action.position(),
@@ -729,7 +730,7 @@ mod tui {
             }
         }
 
-        fn get_bracketed(&self) -> Vec<Point> {
+        fn get_marked(&self) -> Vec<Point> {
             match &self.state {
                 ControlState::Pick | ControlState::BotHalt => vec![],
                 ControlState::Move {
@@ -744,39 +745,7 @@ mod tui {
         }
     }
 
-    pub trait Control {
-        fn up(&mut self);
-        fn down(&mut self);
-        fn left(&mut self);
-        fn right(&mut self);
-        fn enter(&mut self);
-        fn render(&mut self, window: &Window);
-    }
-
-    pub fn control<T>(window: &Window, controller: &mut T)
-    where
-        T: Control,
-    {
-        window.refresh();
-        window.keypad(true);
-        noecho();
-
-        loop {
-            controller.render(window);
-            match window.getch() {
-                Some(Input::Character('q')) => break,
-                Some(Input::KeyUp) => controller.up(),
-                Some(Input::KeyDown) => controller.down(),
-                Some(Input::KeyLeft) => controller.left(),
-                Some(Input::KeyRight) => controller.right(),
-                Some(Input::Character('\n')) => controller.enter(),
-                _ => (),
-            }
-        }
-        endwin();
-    }
-
-    impl<'a> Control for Board<'a> {
+    impl<'a> tui::Controllable for Playfield<'a> {
         fn up(&mut self) {
             if self.cursor.0 > 0 {
                 self.cursor = self.cursor + Point(-1, 0);
@@ -802,18 +771,18 @@ mod tui {
         }
 
         fn enter(&mut self) {
-            match (&self.state, self.playfield.try_get_chess(&self.cursor)) {
+            match (&self.state, self.game.try_get_chess(&self.cursor)) {
                 (_, Err(_)) | (ControlState::Pick, Ok((_, None))) | (ControlState::BotHalt, _) => {}
                 (ControlState::Pick, Ok((player, Some(_))))
-                    if &model::GameState::Turn(player) != self.playfield.get_state() => {}
+                    if &model::GameState::Turn(player) != self.game.get_state() => {}
                 (ControlState::Pick, Ok((_, Some(_)))) => {
                     self.state = ControlState::Move {
                         position: self.cursor,
                         actions: self
-                            .playfield
+                            .game
                             .possible_actions_at(&self.cursor)
                             .into_iter()
-                            .filter(|action| self.playfield.is_valid_action(action))
+                            .filter(|action| self.game.is_valid_action(action))
                             .collect(),
                     };
                 }
@@ -835,7 +804,7 @@ mod tui {
                 ) => {
                     if let Some(action) = actions.iter().find(|action| action.goal() == self.cursor)
                     {
-                        if let Ok(()) = self.playfield.try_apply_action(action) {
+                        if let Ok(()) = self.game.try_apply_action(action) {
                             self.state = ControlState::Pick;
                             self.bot_update();
                         }
@@ -848,26 +817,28 @@ mod tui {
                     },
                     _,
                 ) => {
-                    if let Ok(()) = self.playfield.try_apply_action(action) {
+                    if let Ok(()) = self.game.try_apply_action(action) {
                         self.state = ControlState::Pick;
                         self.bot_update();
                     }
                 }
             }
         }
+    }
 
+    impl<'a> tui::Renderable for Playfield<'a> {
         fn render(&mut self, window: &Window) {
             let offset: &'a _ = &(2, 2);
 
             window.clear();
             let highlighted = self.get_highlighted();
-            let bracketed = self.get_bracketed();
-            let board = self.playfield.get_board();
-            let state = self.playfield.get_state();
-            let score1 = self.playfield.get_score(&model::Player::Player1);
-            let score2 = self.playfield.get_score(&model::Player::Player2);
+            let marked = self.get_marked();
+            let board = self.game.get_board();
+            let state = self.game.get_state();
+            let score1 = self.game.get_score(&model::Player::Player1);
+            let score2 = self.game.get_score(&model::Player::Player2);
 
-            for pos @ Point(y, x) in self.playfield.get_board_positions() {
+            for pos @ Point(y, x) in self.game.get_board_positions() {
                 let sym = match board[y as usize][x as usize] {
                     Some(model::Chess::Pawn) => "*",
                     Some(model::Chess::Drone) => "o",
@@ -877,7 +848,7 @@ mod tui {
                 if highlighted.contains(&pos) {
                     window.attron(pancurses::A_BOLD);
                 }
-                if bracketed.contains(&pos) {
+                if marked.contains(&pos) {
                     window.attron(pancurses::A_UNDERLINE);
                 }
                 window.mv(y + offset.0, x * 2 + 1 + offset.1);
@@ -957,6 +928,46 @@ mod tui {
                 }
             }
         }
+    }
+}
+
+mod tui {
+    extern crate pancurses;
+    use pancurses::{endwin, initscr, noecho, Input, Window};
+
+    pub trait Controllable {
+        fn up(&mut self);
+        fn down(&mut self);
+        fn left(&mut self);
+        fn right(&mut self);
+        fn enter(&mut self);
+    }
+
+    pub trait Renderable {
+        fn render(&mut self, window: &Window);
+    }
+
+    pub fn control<T>(window: &Window, controller: &mut T)
+    where
+        T: Controllable + Renderable,
+    {
+        window.refresh();
+        window.keypad(true);
+        noecho();
+
+        loop {
+            controller.render(window);
+            match window.getch() {
+                Some(Input::Character('q')) => break,
+                Some(Input::KeyUp) => controller.up(),
+                Some(Input::KeyDown) => controller.down(),
+                Some(Input::KeyLeft) => controller.left(),
+                Some(Input::KeyRight) => controller.right(),
+                Some(Input::Character('\n')) => controller.enter(),
+                _ => (),
+            }
+        }
+        endwin();
     }
 
     pub fn execute_in_window<T>(func: T)
@@ -1302,19 +1313,19 @@ fn main() {
         buf.clear();
         std::io::stdin().read_line(&mut buf).unwrap();
         match buf.trim() {
-            "1" => break tui::GameMode::TwoHumans,
-            "2" => break tui::GameMode::HumanBot(3),
-            "3" => break tui::GameMode::BotHuman(3),
-            "4" => break tui::GameMode::TwoBots(3, 3),
+            "1" => break playfield::GameMode::TwoHumans,
+            "2" => break playfield::GameMode::HumanBot(3),
+            "3" => break playfield::GameMode::BotHuman(3),
+            "4" => break playfield::GameMode::TwoBots(3, 3),
             _ => println!("please input number 0~4"),
         }
     };
 
     if TEXT_MODE {
-        let mut playfield = model::Playfield::init();
+        let mut game = model::Game::init();
         loop {
-            println!("{}", playfield);
-            match (playfield.get_state(), mode) {
+            println!("{}", game);
+            match (game.get_state(), mode) {
                 (model::GameState::Win(player), _) => {
                     match player {
                         model::Player::Player1 => {
@@ -1329,11 +1340,11 @@ fn main() {
 
                 (
                     model::GameState::Turn(player @ model::Player::Player1),
-                    tui::GameMode::TwoHumans | tui::GameMode::HumanBot(_),
+                    playfield::GameMode::TwoHumans | playfield::GameMode::HumanBot(_),
                 )
                 | (
                     model::GameState::Turn(player @ model::Player::Player2),
-                    tui::GameMode::TwoHumans | tui::GameMode::BotHuman(_),
+                    playfield::GameMode::TwoHumans | playfield::GameMode::BotHuman(_),
                 ) => {
                     match player {
                         model::Player::Player1 => {
@@ -1348,9 +1359,9 @@ fn main() {
                         std::io::stdout().flush().expect("Could not flush stdout");
                         buf.clear();
                         std::io::stdin().read_line(&mut buf).unwrap();
-                        match playfield.parse_action(&*buf) {
+                        match game.parse_action(&*buf) {
                             Ok(action) => {
-                                playfield.try_apply_action(&action).unwrap();
+                                game.try_apply_action(&action).unwrap();
                                 break;
                             }
                             Err(_) => {
@@ -1362,15 +1373,15 @@ fn main() {
 
                 (
                     model::GameState::Turn(player @ model::Player::Player1),
-                    tui::GameMode::BotHuman(level) | tui::GameMode::TwoBots(level, _),
+                    playfield::GameMode::BotHuman(level) | playfield::GameMode::TwoBots(level, _),
                 )
                 | (
                     model::GameState::Turn(player @ model::Player::Player2),
-                    tui::GameMode::HumanBot(level) | tui::GameMode::TwoBots(_, level),
+                    playfield::GameMode::HumanBot(level) | playfield::GameMode::TwoBots(_, level),
                 ) => {
                     let is_first =
-                        playfield.get_state() == &model::GameState::Turn(model::Player::Player1);
-                    // match algo::decide_path(&playfield, level, is_first) {
+                        game.get_state() == &model::GameState::Turn(model::Player::Player1);
+                    // match algo::decide_path(&game, level, is_first) {
                     //     None => {
                     //         println!("bot halt");
                     //         return;
@@ -1392,10 +1403,10 @@ fn main() {
                     //         let action = path.remove(0);
                     //         buf.clear();
                     //         std::io::stdin().read_line(&mut buf).unwrap();
-                    //         playfield.try_apply_action(&action).unwrap();
+                    //         game.try_apply_action(&action).unwrap();
                     //     }
                     // }
-                    match algo::decide(&playfield, level, is_first) {
+                    match algo::decide(&game, level, is_first) {
                         None => {
                             println!("bot halt");
                             return;
@@ -1413,7 +1424,7 @@ fn main() {
                             std::io::stdout().flush().expect("Could not flush stdout");
                             buf.clear();
                             std::io::stdin().read_line(&mut buf).unwrap();
-                            playfield.try_apply_action(&action).unwrap();
+                            game.try_apply_action(&action).unwrap();
                         }
                     }
                 }
@@ -1421,10 +1432,10 @@ fn main() {
         }
     } else {
         tui::execute_in_window(|window| {
-            let mut playfield = model::Playfield::init();
-            let mut board = tui::Board::init(&mut playfield, mode);
+            let mut game = model::Game::init();
+            let mut playfield = playfield::Playfield::init(&mut game, mode);
 
-            tui::control(window, &mut board);
+            tui::control(window, &mut playfield);
         })
     }
 }
