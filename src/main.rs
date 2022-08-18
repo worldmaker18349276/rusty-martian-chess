@@ -352,9 +352,6 @@ mod model {
     pub struct InvalidAction;
 
     #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
-    pub struct InvalidMovement;
-
-    #[derive(Debug, Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
     pub enum GameState {
         Turn(Player),
         Win(Player),
@@ -489,7 +486,7 @@ mod model {
             &self,
             position: &Point,
             movement: &Movement,
-        ) -> Result<Effect, InvalidMovement> {
+        ) -> Result<Effect, InvalidAction> {
             let (chess, dir, cross) = movement.value();
             match self.try_get_chess(position) {
                 Ok((player, Some(chess_))) if chess_ == chess => {
@@ -499,12 +496,12 @@ mod model {
                         if self.is_empty_at(&goal) {
                             continue;
                         } else {
-                            return Err(InvalidMovement);
+                            return Err(InvalidAction);
                         }
                     }
                     goal = goal + dir;
                     match self.try_get_chess(&goal) {
-                        Err(_) => Err(InvalidMovement),
+                        Err(_) => Err(InvalidAction),
                         Ok((_, None)) => Ok(Effect::Move),
                         Ok((owner, Some(captured))) => {
                             if owner != player {
@@ -517,19 +514,19 @@ mod model {
                                 {
                                     Chess::Queen
                                 } else {
-                                    return Err(InvalidMovement);
+                                    return Err(InvalidAction);
                                 };
                                 let zone = self.get_zone(&player);
                                 if zone.iter().flatten().all(|grid| grid != &Some(promoted)) {
                                     Ok(Effect::Promotion(promoted))
                                 } else {
-                                    Err(InvalidMovement)
+                                    Err(InvalidAction)
                                 }
                             }
                         }
                     }
                 }
-                _ => Err(InvalidMovement),
+                _ => Err(InvalidAction),
             }
         }
 
