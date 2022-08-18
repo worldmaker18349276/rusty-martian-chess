@@ -259,7 +259,89 @@ mod model {
 
     impl Display for Action {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}{}{}", self.position.0, self.position.1, self.movement)
+            match &self.effect {
+                Effect::Move => {
+                    write!(f, "{}{}{}", self.position.0, self.position.1, self.movement)
+                }
+                Effect::Capture(p) => write!(
+                    f,
+                    "{}{}{}x{}",
+                    self.position.0, self.position.1, self.movement, p
+                ),
+                Effect::Promotion(Chess::Pawn) => write!(
+                    f,
+                    "{}{}{}=P",
+                    self.position.0, self.position.1, self.movement
+                ),
+                Effect::Promotion(Chess::Drone) => write!(
+                    f,
+                    "{}{}{}=D",
+                    self.position.0, self.position.1, self.movement
+                ),
+                Effect::Promotion(Chess::Queen) => write!(
+                    f,
+                    "{}{}{}=Q",
+                    self.position.0, self.position.1, self.movement
+                ),
+            }
+        }
+    }
+
+    pub struct ParseActionError;
+
+    impl std::str::FromStr for Action {
+        type Err = ParseActionError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let mut s = s.trim();
+            if s.len() < 2 {
+                return Err(ParseActionError);
+            }
+
+            let position = if let (Ok(x), Ok(y)) = (s[0..1].parse::<i32>(), s[1..2].parse::<i32>())
+            {
+                s = &s[2..];
+                Point(x, y)
+            } else {
+                return Err(ParseActionError);
+            };
+
+            let effect = match &s[s.len() - 2..s.len() - 1] {
+                "x" => {
+                    let point = if let Ok(point) = s[s.len() - 1..].parse::<i32>() {
+                        point
+                    } else {
+                        return Err(ParseActionError);
+                    };
+                    s = &s[..s.len() - 2];
+                    Effect::Capture(point)
+                }
+                "=" => {
+                    let chess = match &s[s.len() - 1..] {
+                        "P" => Chess::Pawn,
+                        "D" => Chess::Drone,
+                        "Q" => Chess::Queen,
+                        _ => {
+                            return Err(ParseActionError);
+                        }
+                    };
+                    s = &s[..s.len() - 2];
+                    Effect::Promotion(chess)
+                }
+                _ => Effect::Move,
+            };
+
+            let movement = if let Ok(movement) = s.parse::<Movement>() {
+                movement
+            } else {
+                return Err(ParseActionError);
+            };
+
+            Ok(Action {
+                position,
+                movement,
+                effect,
+            })
         }
     }
 
@@ -469,41 +551,6 @@ mod model {
                 }
             }
             vec
-        }
-
-        pub fn parse_action(&self, input: &str) -> Result<Action, InvalidAction> {
-            let input = input.trim();
-            if input.len() < 2 {
-                return Err(InvalidAction);
-            }
-            let position =
-                if let (Ok(x), Ok(y)) = (input[0..1].parse::<i32>(), input[1..2].parse::<i32>()) {
-                    Point(x, y)
-                } else {
-                    return Err(InvalidAction);
-                };
-
-            let movement = if let Ok(movement) = input[2..].parse::<Movement>() {
-                movement
-            } else {
-                return Err(InvalidAction);
-            };
-
-            let action = if let Ok(effect) = self.try_get_effect(&position, &movement) {
-                Action {
-                    position,
-                    movement,
-                    effect,
-                }
-            } else {
-                return Err(InvalidAction);
-            };
-
-            if self.is_valid_action(&action) {
-                Ok(action)
-            } else {
-                Err(InvalidAction)
-            }
         }
 
         pub fn is_valid_action(&self, action: &Action) -> bool {
@@ -1345,7 +1392,7 @@ fn main() {
                         std::io::stdout().flush().expect("Could not flush stdout");
                         buf.clear();
                         std::io::stdin().read_line(&mut buf).unwrap();
-                        match game.parse_action(&*buf) {
+                        match buf.parse::<model::Action>() {
                             Ok(action) => {
                                 game.try_apply_action(&action).unwrap();
                                 break;
